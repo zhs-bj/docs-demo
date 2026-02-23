@@ -1,0 +1,61 @@
+name: Deploy VitePress site to Pages
+
+on:
+  push:
+    branches: [master]
+
+# 设置token访问权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 只允许同时进行一次部署，跳过正在运行和最新队列之间的运行队列
+# 但是，不要取消正在进行的运行，因为我们希望允许这些生产部署完成
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # 构建工作
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4  # ✅ 升级到最新兼容版
+        with:
+          fetch-depth: 0 # 如果未启用 lastUpdated，则不需要
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3  # ✅ 升级到最新兼容版
+        with:
+          version: 8.6.12 # 保留你指定的pnpm版本
+      - name: Setup Node
+        uses: actions/setup-node@v4  # ✅ 升级到最新兼容版
+        with:
+          node-version: 18
+          cache: pnpm # 保留缓存配置
+      - name: Setup Pages
+        uses: actions/configure-pages@v5  # ✅ 升级到最新兼容版
+      - name: Install dependencies
+        run: pnpm install # 保留安装依赖逻辑
+      - name: Build with VitePress
+        run: |
+          pnpm run docs:build # 保留构建命令
+          touch .vitepress/dist/.nojekyll  # ✅ 修正路径：.nojekyll要放在dist目录下才生效
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3  # ✅ 升级到最新兼容版（关键修复）
+        with:
+          path: .vitepress/dist # 保留你指定的构建产物路径
+
+  # 部署工作
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }} # 保留URL输出逻辑
+    needs: build    # 保留依赖build任务
+    runs-on: ubuntu-latest  # 保留运行环境
+    name: Deploy
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment  # 保留id
+        uses: actions/deploy-pages@v4  # ✅ 升级到最新兼容版（关键修复）
