@@ -24,16 +24,22 @@ jobs:
         with:
           fetch-depth: 0
 
+
+
+      # ✅ 先安装 pnpm
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8.6.12
+
+  # ✅ 再安装 Node，此时 pnpm 已存在，缓存可以正常工作
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'  # 如果你使用的是 npm 或 yarn，请相应修改这里
+          node-version: 18
+          cache: pnpm
+          cache-dependency-path: 'pnpm-lock.yaml'
 
-      - name: Setup pnpm  # 如果使用 npm 或 yarn，可以删除这一步
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8
 
       - name: Install dependencies
         run: pnpm install  # 或 npm install / yarn install
