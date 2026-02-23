@@ -5,7 +5,8 @@ import { set_sidebar } from "./utils/auto_sidebar.mjs";	// 改成自己的路径
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  head: [["link", { rel: "icon", href: "/logo.png" }]],
+  base: "/docs-demo/", // 设置部署的基础路径
+  head: [["link", { rel: "icon", href: "/docs-demo/logo.png" }]],
   title: "我的文档项目",
   description: "A VitePress Site",
   themeConfig: {
