@@ -1,0 +1,63 @@
+# 构建 VitePress 站点并将其部署到 GitHub Pages 的示例工作流程
+name: Deploy VitePress site to Pages
+
+on:
+  push:
+    branches: [master] # 你的分支是master，不是官方的main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      
+      # ✅ 官方注释提示：使用pnpm需取消这步注释（核心1）
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9 # 官方推荐的最新版
+      
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm # ✅ 把npm改成pnpm（核心2，解决锁文件报错）
+          cache-dependency-path: pnpm-lock.yaml # ✅ 显式指定pnpm锁文件路径
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      
+      - name: Install dependencies
+        run: pnpm install # ✅ 把npm ci改成pnpm install（核心3）
+      
+      - name: Build with VitePress
+        run: pnpm run docs:build # ✅ 把npm run改成pnpm run
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .vitepress/dist # ✅ 修正dist路径（你的项目没有docs/前缀）
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
