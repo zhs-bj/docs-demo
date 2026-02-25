@@ -49,7 +49,7 @@ export default defineConfig({
     ],
 
     footer:{
-      copyright:"Copyright @ 2025 pigsy"
+      copyright:"Copyright @ 2026 pigsy"
     },
 
        // 设置搜索框的样式
