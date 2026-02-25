@@ -7,7 +7,7 @@ import { set_sidebar } from "./utils/auto_sidebar.mjs";	// 改成自己的路径
 export default defineConfig({
   base: "/docs-demo/", // 设置部署的基础路径
   head: [["link", { rel: "icon", href: "/docs-demo/logo.png" }]],
-  title: "我的文档项目",
+  title: "前端学习笔记",
   description: "A VitePress Site",
   themeConfig: {
     sidebar: false, //关闭侧边栏
@@ -17,16 +17,29 @@ export default defineConfig({
     logo: '/logo.png',
     // https://vitepress.dev/reference/default-theme-config
     nav: [
-      { text: '家',
+      { text:'首页',link:'/'},
+
+      { text: 'HTML',
         items:[
-          {text:'首页',link:'/'},
-          {text:'markdown示例',link:'/markdown-examples'}
+          {text:'HTML认知',link:'/HTML/HTML认知'},
+          {text:'HTML基础',link:'/HTML/HTML基础'}
         ]
       },
-      { text: 'markdown示例', link: '/markdown-examples' },
-      { text: '自动生成侧边栏', link: '/front-end/react/' },
-      { text: '自动生成侧边栏2', link: '/backend/rabbitmq/'},
-      { text: '两边栏演示', link: '/两边栏演示'},
+
+      { text: 'CSS',
+        items:[
+          {text:'CSS基础',link:'/CSS/CSS基础'},
+          {text:'CSS进阶',link:'/CSS/CSS进阶'}
+        ]
+      },
+
+      { text: 'JavaScript',
+        items:[
+          {text:'JS入门',link:'/JS/JS入门'},
+          {text:'JS数据类型',link:'/JS/JS数据类型'}
+        ]
+      },
+      
     ],
 
     // sidebar: [

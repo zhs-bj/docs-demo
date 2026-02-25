@@ -11,11 +11,11 @@ hero:
     alt: 前端学习
   actions:
     - theme: brand
-      text: 京东网站
-      link: https://www.jd.com
+      text: vitepress搭建学习文档
+      link: https://docs.bugdesigner.cn/docs/Tutorial/vitepress.html
     - theme: alt
-      text: API 示例
-      link: /api-examples
+      text: vitepress官方文档
+      link: https://vitepress.dev/zh/guide/deploy#github-pages
 
 features:
   - title: HTML 学习
