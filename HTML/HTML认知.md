@@ -1,4 +1,4 @@
-## HTML
+
 学习参考视频：https://www.bilibili.com/video/BV1Kg411T7t9/?spm_id_from=333.337.search-card.all.click&vd_source=a792cef94b4f097094af2d83b2abe623
 
 ## 网页认知
@@ -272,17 +272,48 @@ ps:文字太长可以在VS Code中调整为：自动换行
 
 #### 视频标签
 1. 场景:在页面中插入视频
-2. 代码
+2. 代码：video标签
 ```html
 <video src="./video.mp4" controls autoplay loop></video>
 ```
 3. 常见属性:
+
 |属性名|功能|
 |---|---|
 |src|视频的路径|
 |controls|显示播放的控件|
 |autoplay|自动播放(谷歌浏览器中需配合muted实现静音播放)|
 |loop|循环播放|
+ 
+ 4. 注意点：
+ - 视频标签目前支持三种格式：**MP4**、WebM、Ogg
 
+### 链接标签
 
+#### 链接标签的介绍
 
+1. 场景:点击之后，从一个页面跳转到另一个页面
+2. 称呼: a标签、超链接、锚链接
+3. 代码
+```html
+<a href="./目标网页.html">超链接</a>
+```
+4. 特点:
+- 双标签，内部可以包裹内容
+- 如果需要a标签点击之后去指定页面，需要设置a标签的href属性
+- 空链接：href设为 # 
+- 自带颜色
+
+#### 链接标签的target属性
+1. 属性名:target
+2. 属性值:目标网页的打开形式
+
+|取值|效果|
+|---|---|
+|_self|默认值，在当前窗口中跳转(覆盖原网页)|
+|_blank|在新窗口中跳转(保留原网页)|
+
+3. 代码：
+```html
+<a href="https://www.baidu.com/" target="_blank">百度一下</a>
+```
