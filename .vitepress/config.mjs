@@ -22,7 +22,8 @@ export default defineConfig({
       { text: 'HTML',
         items:[
           {text:'HTML认知',link:'/HTML/HTML认知'},
-          {text:'HTML基础',link:'/HTML/HTML基础'}
+          {text:'HTML基础',link:'/HTML/HTML基础'},
+          {text:'综合案例1',link:'/综合案例/案例1-招聘.html'}
         ]
       },
 
