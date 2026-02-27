@@ -8,7 +8,7 @@
 1. 写在哪里
 css写在style标签中，style标签一般写在head标签里面，title标签下面
 2. 怎么写?
-![](https://picui.ogmua.cn/s1/2026/02/27/69a12197d7483.webp)
+<img src="https://picui.ogmua.cn/s1/2026/02/27/69a12197d7483.webp" width="300">
 
 ### CSS引入方式
 1. **内嵌式**:CSS写在style标签中
