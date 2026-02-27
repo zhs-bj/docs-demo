@@ -23,14 +23,15 @@ export default defineConfig({
         items:[
           {text:'HTML认知',link:'/HTML/HTML认知'},
           {text:'HTML基础',link:'/HTML/HTML基础'},
-          {text:'综合案例',link:'/综合案例/综合案例'}
+          {text:'HTML综合案例',link:'/综合案例/HTML综合案例'}
         ]
       },
 
       { text: 'CSS',
         items:[
           {text:'CSS基础',link:'/CSS/CSS基础'},
-          {text:'CSS进阶',link:'/CSS/CSS进阶'}
+          {text:'CSS进阶',link:'/CSS/CSS进阶'},
+          {text:'CSS综合案例',link:'/综合案例/CSS综合案例'}
         ]
       },
 
