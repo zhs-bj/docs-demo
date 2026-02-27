@@ -41,6 +41,8 @@ export default defineConfig({
           {text:'JS数据类型',link:'/JS/JS数据类型'}
         ]
       },
+
+      { text: 'vitepress',link:'/vitepress搭建'}
       
     ],
 
