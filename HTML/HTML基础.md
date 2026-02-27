@@ -304,9 +304,9 @@
 
 ## 表单标签
 场景：做**登录、注册、搜索**功能的时候
-![](https://picui.ogmua.cn/s1/2026/02/27/69a0fd15b456a.webp)
-![](https://picui.ogmua.cn/s1/2026/02/27/69a0fd1709bad.webp)
-![](https://picui.ogmua.cn/s1/2026/02/27/69a0fd16e8808.webp)
+<img src="https://picui.ogmua.cn/s1/2026/02/27/69a0fd15b456a.webp" width="200">
+<img src="https://picui.ogmua.cn/s1/2026/02/27/69a0fd1709bad.webp" width="200">
+<img src="https://picui.ogmua.cn/s1/2026/02/27/69a0fd16e8808.webp" width="200">
 
 ### input系列标签的基本介绍
 1. 场景:在网页中显示收集用户信息的表单效果，如:登录页、注册页
