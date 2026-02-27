@@ -23,7 +23,9 @@ export default defineConfig({
         items:[
           {text:'HTML认知',link:'/HTML/HTML认知'},
           {text:'HTML基础',link:'/HTML/HTML基础'},
-          {text:'综合案例1',link:'/综合案例/案例1-招聘.html'}
+          {text:'综合案例1',link:'/综合案例/案例1-招聘'},
+          {text:'综合案例2',link:'/综合案例/案例2-学生信息表'},
+          {text:'综合案例3',link:'/综合案例/案例3-表单'}
         ]
       },
 
