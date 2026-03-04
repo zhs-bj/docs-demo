@@ -1270,6 +1270,17 @@ compare 646_Transpose_f32: 100%|████████████████
 (3)输出结果分析：
 - 模型转换成功：成功生成BM1684X可用的F16精度bmodel文件
 ![](https://picui.ogmua.cn/s1/2026/03/04/69a7f198b1025.webp)
+- 第一轮精度验证通过（TPU 优化后 MLIR vs 原始 MLIR）
+检查为 BM1684X 做的优化（如层分组、算子适配）是否破坏模型精度,确保**硬件优化**只提升性能，不损失推理效果。
+![](https://picui.ogmua.cn/s1/2026/03/04/69a7f19919412.webp)
+3 个输出节点精度达标，无损失
+- 第二轮精度验证通过（bmodel vs TPU 优化后 MLIR）
+检查从优化后的 MLIR 模型编译为 bmodel 二进制文件的过程是否出错, 确保最终可部署的 bmodel 文件和优化后的 MLIR 模型完全一致
+![](https://picui.ogmua.cn/s1/2026/03/04/69a7f19947083.webp)
+bmodel 推理结果与优化后 MLIR 一致，可直接部署
+
+##### MLIR转INT8
+
 
 
 
