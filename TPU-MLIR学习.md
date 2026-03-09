@@ -1280,6 +1280,16 @@ compare 646_Transpose_f32: 100%|████████████████
 bmodel 推理结果与优化后 MLIR 一致，可直接部署
 
 ##### MLIR转INT8
+(1)生成校准表
+使用：run_calibration
+这里用COCO2017的100张图片举例
+```powershell
+run_calibration yolov5s.mlir \
+    --dataset ../COCO2017 \
+    --input_num 100 \
+    -o yolov5s_cali_table
+```
+运行完成后会生成名为 yolov5s_cali_table 的文件
 
 
 

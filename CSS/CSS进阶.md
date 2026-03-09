@@ -453,6 +453,221 @@ img标签是一个标签，不设置宽高默认会以原尺寸显示
 </html>
 ```
 
+### 拓展：HTML嵌套规范注意点
+1. 块级元素一般作为大容器，可以嵌套:文本、块级元素、行内元素、行内块元素等等等...
+但是:p标签中不要嵌套div、p、h等块级元素。假设这样写了，浏览器会自动帮你改，会把父子关系改成并列的兄弟关系
+2. a标签内部可以嵌套**任意元素**
+但是:a标签不能嵌套a标签，浏览器都不知道到底跳转到哪个链接
+![](https://picui.ogmua.cn/s1/2026/03/06/69aa3afaa5c04.webp)
+
+
+## CSS特性
+### 继承性
+#### 继承性的介绍
+1. 特性: 子元素有默认继承父元素样式的特点(子承父业)
+2. 可以继承的常见属性 (**文字控制属性**都可以继承，不是文字控制的属性不可以继承)
+- color
+- font-style、font-weight、font-size、font-family
+- text-indent、text-align
+- line-height
+3. 注意点: 可以通过调试工具（谷歌浏览器点检查）判断样式是否可以继承
+![](https://picui.ogmua.cn/s1/2026/03/06/69aa3ce6a24b6.webp)
+
+#### 拓展：继承失效的特殊情况
+1. 超链接的颜色属性color会继承失效（超链接自己有颜色蓝色，不会再继承父级的颜色属性）
+2. <h1-h6>标题标签有自己默认的字号，不会继承父级的字号属性font-size
+
+### 层叠性
+#### 层叠性的介绍
+1. 特性:
+- 给同一个标签设置**不同**的样式 → 此时样式会层叠叠加 → 会共同作用在标签上
+- 给同一个标签设置**相同**的样式 → 此时样式会层叠覆盖 → 最终写在最后的样式会生效
+2. 注意点:
+当样式冲突时，只有当选择器**优先级相同**时才能通过层叠性判断结果
+
+### 优先级
+#### 优先级的介绍
+1. 特性:不同选择器具有不同的优先级，优先级高的选择器样式会覆盖优先级低选择器样式。当一个标签使用了多个选择器，样式冲突的时候，到底谁生效？
+2. 优先级公式:
+继承 < 通配符选择器 < 标签选择器 < 类选择器 < id选择器 < 行内样式 < !important
+ps:谁更精准，谁的优先级更高；谁的范围更广，谁的优先级更低
+3. 注意点:
+- !important写在属性值的后面，分号的前面
+- !important不能提升继承的优先级，只要是继承优先级最低
+- 实际开发中不建议使用!important。
+4. 代码示例：
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        /* 从上往下优先级升高 */
+        /* body为继承 */
+        /* 不能给继承加!important，自己有的就没法继承父级的了 */
+        body {
+            color: red;
+        }
+        /* div为标签 */
+        div {
+            color: green !important; /* !important写在分号前面（分号就表示这个样式结束了），优先级最高，覆盖所有样式 */
+        }
+        /* .body为类 */
+        .body {
+            color: blue;
+        }
+        /* #body为ID */
+        #body {
+            color: yellow;
+        }
+
+    </style>
+</head>
+
+<body>
+    <!-- 在这里写style是行内样式 -->
+    <div class="body" id="body" style="color: pink;">这是一个div标签</div>
+</body>
+</html>
+```
+
+#### 权重叠加计算
+1. 场景:如果是复合选择器，此时需要通过权重叠加计算方法，判断最终哪个选择器优先级最高会生效
+2. 权重叠加计算公式:(每一级之间不存在进位)
+![](https://picui.ogmua.cn/s1/2026/03/07/69ac40a94aa3e.webp)
+3. 比较规则:
+- 先比较第一级数字，如果比较出来了，之后的统统不看
+- 如果第一级数字相同，此时再去比较第二级数字，如果比较出来了，之后的统统不看
+- 如果最终所有数字都相同，表示优先级相同，则比较层叠性(谁写在下面，谁说了算!)
+4. 注意点:!important如果不是继承，则权重最高，天下第一!
+5. 代码示例：
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+
+        /* (行内，id，类，标签) */
+
+        /* (0,1,0,1)  权重最高 */
+        div #one {
+            color: red;
+        }
+
+        /* (0,0,2,0) */
+        .father .son {
+            color: green;
+        }
+
+        /* 选的是继承，优先级最低 */
+        .father {
+            color: blue;
+        }
+
+        /* (0,0,0,2) */
+        div p {
+            color: yellow;
+        }
+    </style>
+</head>
+<body>
+    <div class="father">
+        <p class="son" id="one">我是一个p标签</p>
+    </div>
+</body>
+</html>
+```
+
+## 谷歌排错
+![](https://picui.ogmua.cn/s1/2026/03/08/69ad0f8caffe5.webp)
+
+如果检查发现，字对应的style里面没有，要么是没写style，要么是**选择器写错**了
+![](https://picui.ogmua.cn/s1/2026/03/08/69ad102226c55.webp)
+
+(1)错法1：选择器名词写错
+```html
+<style>
+    /* father写错单词 */
+    .fahter .son .sun {
+        color: blue;
+    }
+</style>
+</head>
+<body>
+    <div class="father">
+        <div class="son">
+            <div class="sun">孙子</div>
+        </div>
+    </div>
+</body>
+```
+(2)错法2：选择器写法出错
+```html
+<style>
+    /* 多写了一个标签选择器div */
+    .fahter .son .sun div{
+        color: blue;
+    }
+</style>
+</head>
+<body>
+    <div class="father">
+        <div class="son">
+            <div class="sun">孙子</div>
+        </div>
+    </div>
+</body>
+```
+(3)错法3：css上一行代码出错，会导致下一行也不生效
+```html
+<style>
+    /* 写多了一个大括号 */
+    }
+    .fahter .son .sun {
+        color: blue;
+    }
+</style>
+</head>
+<body>
+    <div class="father">
+        <div class="son">
+            <div class="sun">孙子</div>
+        </div>
+    </div>
+</body>
+```
+(4)错法4：语法错误
+黄色叹号表示有语法错误
+![](https://picui.ogmua.cn/s1/2026/03/08/69ad136ea903f.webp)
+```html
+<style>
+    .fahter .son .sun {
+        /* 下面一句少了分号 */
+        /* 还要注意所有标点符号都要是英文的，否则也会报错 */
+        color: blue
+    }
+</style>
+</head>
+<body>
+    <div class="father">
+        <div class="son">
+            <div class="sun">孙子</div>
+        </div>
+    </div>
+</body>
+```
+
+
+
+
+
+
+
 
 
 

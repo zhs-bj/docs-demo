@@ -126,3 +126,105 @@
 #### 渲染结果：
 <img src="https://picui.ogmua.cn/s1/2026/02/27/69a13fe16695c.webp" width="700">
 
+
+## 综合案例3-导航1
+#### 代码：
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<style>
+    a {
+        text-decoration: none;
+        /* 不转换成块的话，宽高会不生效 */
+        /* 行内块：一行可以放多个 */
+        display: inline-block;
+        width: 100px;
+        height: 50px;
+        background-color: red;
+        color: white;
+        text-align: center;
+        line-height: 50px;
+        
+    }
+
+    a:hover {
+        background-color: orange;
+    }
+</style>
+<body>
+    <!-- a{导航$}*5 -->
+     <!-- 选多行加内容：alt + shift + 鼠标左键单击 -->
+    <a href="#">导航1</a>
+    <a href="#">导航2</a>
+    <a href="#">导航3</a>
+    <a href="#">导航4</a>
+    <a href="#">导航5</a>
+</body>
+</html>
+```
+
+#### 渲染结果：
+![](https://picui.ogmua.cn/s1/2026/03/06/69aa413042f64.webp)
+![](https://picui.ogmua.cn/s1/2026/03/06/69aa41621f9a5.webp)
+
+
+## 综合案例4-导航2
+#### 代码：
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        a {
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            width: 200px;
+            height: 100px;
+            line-height: 70px;
+            color: white;
+            background-size: 100% 100%;
+        }
+        /* 每个a的背景图都不同，需要单独找 */
+        .one {           
+            background-image: url(../docs-demo/public/导航栏1.png);
+        }
+        .two {
+            background-image: url(../docs-demo/public/导航栏2.png);
+        }
+        .three {
+            /* line-height: 80px; */
+            background-image: url(../docs-demo/public/导航栏3.png);
+        }
+        .four {
+            background-image: url(../docs-demo/public/导航栏4.png);
+        }
+        .five {
+            background-image: url(../docs-demo/public/导航栏5.png);
+        }
+        .one:hover {
+            background-image: url(../docs-demo/public/导航栏2.png);
+        }
+
+    </style>
+</head>
+<body>
+    <a href="#" class="one">五彩导航</a>
+    <a href="#" class="two">五彩导航</a>
+    <a href="#" class="three">五彩导航</a>
+    <a href="#" class="four">五彩导航</a>
+    <a href="#" class="five">五彩导航</a>
+</body>
+</html>
+```
+
+#### 结果:
+![](https://picui.ogmua.cn/s1/2026/03/07/69ac1c9234142.webp)
