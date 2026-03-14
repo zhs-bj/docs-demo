@@ -454,3 +454,183 @@
 ### 效果：
 ![](image-7.png)
 
+
+## 案例5-浮动网页布局
+![](https://picui.ogmua.cn/s1/2026/03/09/69aebb404c7a9.webp)
+### 思路
+1. 先要有版心居中div，再放两个div来浮动
+### 代码：
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        .top {
+            height: 40px;
+            background-color: #333333;
+        }
+        .main {
+            margin: auto;
+            width: 1226px;
+            height: 100px;
+            background-color: #ffc0cb;
+        }
+        .content {
+            margin: 0 auto;
+            width: 1226px;
+            height: 460px;
+        }
+        .left {
+            width: 234px;
+            height: 460px;
+            background-color: #ffa500;
+            float: left;
+        }
+        .right {
+            width: 992px;
+            height: 460px;
+            background-color: #87ceeb;
+            float: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="top"></div>
+    <div class="main"></div>
+    <div class="content">
+        <div class="left"></div>
+        <div class="right"></div>
+    </div>
+</body>
+</html>
+```
+
+### 效果
+![](https://picui.ogmua.cn/s1/2026/03/09/69aebf3757c85.webp)
+
+
+## 案例6-小米模块（浮动）
+![](https://picui.ogmua.cn/s1/2026/03/09/69aec0da21668.webp)
+
+### 代码：
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        .big {
+            margin: 14px auto;
+            width: 1226px;
+            height: 614px;
+        }
+        .one {
+            float: left;
+            width: 234px;
+            height: 614px;
+            background-color: #800080;
+        }
+        .two {
+            float: left;
+            margin-left: 14px;
+            margin-bottom: 14px;
+            width: 234px;
+            height: 300px;
+            background-color: #87ceeb;
+        }
+    </style>
+</head>
+<body>
+    <div class="big">
+        <div class="one"></div>
+        <div class="two"></div>
+        <div class="two"></div>
+        <div class="two"></div>
+        <div class="two"></div>
+        <div class="two"></div>
+        <div class="two"></div>
+        <div class="two"></div>
+        <div class="two"></div>
+
+    </div>
+</body>
+</html>
+```
+### 效果
+![](https://picui.ogmua.cn/s1/2026/03/10/69afb2e5721ec.webp)
+
+
+## 案例7-网页导航（浮动）
+![](https://picui.ogmua.cn/s1/2026/03/10/69afb3ef38842.webp)
+
+### 代码
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        .box {
+            margin: 50px auto;
+            width: 640px;
+            height: 50px;
+        }
+        li {
+            float: left;
+            width: 80px;
+            height: 50px;
+            background-color: #ffc0cb;
+            font-size: 16px;
+            list-style: none;
+            text-align: center;
+        }
+        a {
+            /* 最好a的范围可以大一点，方便点中 */
+            width: 80px;
+            height: 50px;
+            line-height: 50px;
+            text-align: center;
+            text-decoration: none;
+            color: white;
+        }
+        li:hover {
+            background-color: #008000;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <!-- 小米网页做主导航都是li里面a，这样浏览器解析效率会高 -->
+        <ul>
+            <li><a href="#">新闻1</a></li>
+            <li><a href="#">新闻2</a></li>
+            <li><a href="#">新闻3</a></li>
+            <li><a href="#">新闻4</a></li>
+            <li><a href="#">新闻5</a></li>
+            <li><a href="#">新闻6</a></li>
+            <li><a href="#">新闻7</a></li>
+            <li><a href="#">新闻8</a></li>
+        </ul>
+    </div>
+</body>
+</html>
+```
+
+### 效果
+![](https://picui.ogmua.cn/s1/2026/03/10/69afb86341ee7.webp)
+
