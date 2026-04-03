@@ -39,7 +39,8 @@ export default defineConfig({
       { text: 'JavaScript',
         items:[
           {text:'JS入门',link:'/JS/JS入门'},
-          {text:'JS数据类型',link:'/JS/JS数据类型'}
+          {text:'JS基础',link:'/JS/JS基础'},
+          {text:'JS进阶',link:'/JS/JS进阶'},
         ]
       },
 
