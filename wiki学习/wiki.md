@@ -152,9 +152,9 @@ name: 'Team XXX 2026 Wiki',
 
 页头背景图： Frontmatter 里的 heroImage
 
-页面内的图：pages里的.md里的<img>
+页面内的图：pages里的.md里的`<img>`
 
-交互组件：在需要的地方加<script setup> 
+交互组件：在需要的地方加`<script setup> `
 
 #### 注意事项
 
