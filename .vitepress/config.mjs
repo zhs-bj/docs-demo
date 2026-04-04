@@ -46,7 +46,11 @@ export default defineConfig({
 
       { text: 'vitepress',link:'/vitepress搭建'},
 
-      { text: 'TPU-MLIR', link:'/TPU-MLIR学习'}
+      { text: 'TPU-MLIR', link:'/TPU-MLIR学习'},
+
+      { text: 'wiki', link:'/wiki学习/wiki'},
+
+      { text: 'software', link:'/software学习/software'}
       
     ],
 
