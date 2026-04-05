@@ -46,7 +46,15 @@ export default defineConfig({
 
       { text: 'vitepress',link:'/vitepress搭建'},
 
-      { text: 'TPU-MLIR', link:'/TPU-MLIR学习'},
+      { text: 'SOPHON',
+        items:[
+          {text:'术语学习',link:'/算能/术语学习'},
+          {text:'TPU-MLIR',link:'/算能/TPU-MLIR学习'},
+          {text:'airbox',link:'/算能/airbox'},
+          {text:'晚晴系统',link:'/算能/晚晴系统'}
+          
+        ]
+      },
 
       { text: 'wiki', link:'/wiki学习/wiki'},
 
