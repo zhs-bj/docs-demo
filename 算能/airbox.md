@@ -33,19 +33,19 @@
 
 ### 安装 radxa Stable Diffusion 文/图生图 App
 1. Error 1: 填的镜像名写错了，把版本号 tag 填重复了
-<img src="image.png" width="300">
+<img src="./image.png" width="300">
 
 2. Error2：CasaOS 已经开始去 Docker Hub 拉镜像了，但在访问 Docker Hub 的镜像仓库入口 registry-1.docker.io 这一步失败了
-<img src="image-1.png" width="300">
+<img src="./image-1.png" width="300">
 
 3. 按照ai的指示去找问题
 (1)登录SSH
 - 打开powershell
 - 输入：ssh linaro@192.168.31.70
 - 或者输入：ssh admin@192.168.31.70
-<img src="image-2.png" width="350">
+<img src="./image-2.png" width="350">
 (2)依次输入四条指令，观察结果
-<img src="image-3.png" width="350">
+<img src="./image-3.png" width="350">
 
 - ping -c 4 8.8.8.8 成功 → AirBox 能上外网
 - ping -c 4 registry-1.docker.io 解析到了2a03:2880:...→ 域名解析也正常
@@ -98,7 +98,7 @@ docker pull hello-world
 
 6. Error3：no space left
 输入命令查看当前空间
-<img src="image-4.png" width="300">
+<img src="./image-4.png" width="300">
 ---
 
 ## AirBox 上 YOLOv5 现成 Demo 试跑总结
@@ -185,4 +185,4 @@ python3 python/yolov5_opencv.py --input datasets/test --bmodel models/BM1684X/yo
 - `zidane.jpg`
 
 json文件中可以看到标准检测结果形式
-<img src="image-5.png" width="350">
+<img src="./image-5.png" width="350">
