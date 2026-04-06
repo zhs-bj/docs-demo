@@ -292,13 +292,13 @@ user    0m2.571s
 sys     0m0.221s
 ```
 #### 测系统内存前后变化
-<img src="image-6.png" width="350">
+<img src="./image-6.png" width="350">
 
 和bmrt_test一样，运行前后内存占用没有变化
 
 #### 测运行时进程内存
 1. 开另一个终端，登录进入airbox，输入`top`，再按一下`M`
-<img src="image-8.png" width="350">
+<img src="./image-8.png" width="350">
 
 2. 在原来的终端跑Python demo
 ```powershell
@@ -313,7 +313,7 @@ time python3 python/yolov5_opencv.py \
   ```
 
 3. 去另一个终端看
-<img src="image-7.png" width="350">
+<img src="./image-7.png" width="350">
 
 |项目|数值|
 |---|---|
