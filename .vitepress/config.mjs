@@ -56,7 +56,12 @@ export default defineConfig({
         ]
       },
 
-      { text: 'wiki', link:'/wiki学习/wiki'},
+      { text: 'wiki',
+        items:[
+          {text:'wiki学习', link:'/wiki学习/wiki'},
+          {text:'homepage学习',link:'/wiki学习/homepage'}
+        ]   
+      },
 
       { text: 'software', link:'/software学习/software'}
       

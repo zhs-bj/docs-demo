@@ -1,9 +1,10 @@
-## 网址：
+## 常用：
 1. 硬件盒的说明文件：https://docs.radxa.com/fogwise/airbox
 2. CasaOS的登录网址：http://192.168.31.70:81/
 3. 登录SSH：
 - 输入：ssh linaro@192.168.31.70
 - 或者输入：ssh admin@192.168.31.70
+4. 盒子关机：要在airbox里输入`sudo poweroff`，然后再拔掉盒子的电源
 
 ---
 ## 硬件连接准备工作
