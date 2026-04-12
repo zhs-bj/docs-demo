@@ -1,8 +1,8 @@
 ## 类似的花园相关的homepage
 ### 2024 iGEM - Marburg   
 https://2024.igem.wiki/marburg/
-#### 亮点
-##### 鼠标跟随的聚光灯效果
+
+#### 鼠标跟随的聚光灯效果
 <img src="./image-3.png" width=350>
 
 1. 结构
@@ -34,7 +34,7 @@ document.addEventListener("mousemove", (e) => {
 });
 ```
 
-##### 图片对比滑块
+#### 图片对比滑块
 - 一张 1993 年卫星图
 - 一张 2022 年卫星图
 - 中间一个圆形拖拽按钮
@@ -305,10 +305,10 @@ After
 
 ### 2023 WageningenUR
 https://2023.igem.wiki/wageningenur/home?
-#### 亮点
+
 <img src="./image-4.png" width="350">
 
-##### 绘本式首屏 海报式构图
+#### 绘本式首屏 海报式构图
 
 1. 特点
 - 页面不像常规网页，更像一张插画海报
@@ -339,8 +339,8 @@ CSS
 }
 ```
 
-##### 滑动感（树干）
-###### position
+#### 滑动感（树干）
+##### position
 我去研究了一下，滑动感大致分为三种情况的position
 1. absolute：相对于**父容器**摆位置。父容器滚，它也跟着滚。
 ```CSS
@@ -417,7 +417,7 @@ HomeContainerImg9.style.opacity = '1';
 
 
 
-###### 分析这个网页
+##### 这个网页
 1. 使用了`position:relative`的地方：用在**作为定位参照**或**轻微挪动但仍参与文档流**的元素上。
 - 外层容器：它自己还是正常占据页面空间、跟着页面滚动，但里面的 `absolute` 图片可以以它为参照定位。
 `home.css`:61
