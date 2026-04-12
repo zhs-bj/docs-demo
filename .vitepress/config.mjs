@@ -7,7 +7,7 @@ import { set_sidebar } from "./utils/auto_sidebar.mjs";	// 改成自己的路径
 export default defineConfig({
   base: "/docs-demo/", // 设置部署的基础路径
   head: [["link", { rel: "icon", href: "/docs-demo/logo.png" }]],
-  title: "前端学习笔记",
+  title: "学习笔记",
   description: "A VitePress Site",
   themeConfig: {
     sidebar: false, //关闭侧边栏
