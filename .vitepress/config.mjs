@@ -51,7 +51,8 @@ export default defineConfig({
           {text:'术语学习',link:'/算能/术语学习'},
           {text:'TPU-MLIR',link:'/算能/TPU-MLIR学习'},
           {text:'airbox',link:'/算能/airbox'},
-          {text:'晚晴系统',link:'/算能/晚晴系统'}
+          {text:'晚晴系统',link:'/算能/晚晴系统'},
+          {text:'task2',link:'/算能/task2'}
           
         ]
       },

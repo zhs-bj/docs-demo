@@ -5,13 +5,14 @@
 - 输入：ssh linaro@192.168.31.70
 - 或者输入：ssh admin@192.168.31.70
 4. 盒子关机：要在airbox里输入`sudo poweroff`，然后再拔掉盒子的电源
+5. 处理器：BM1684X（算能面向深度学习领域推出的第四代张量处理器）
 
 ---
 ## 硬件连接准备工作
 ### 路由器
 1. 一根电源线，插插座
 2. 一根网线，接寝室的网
-3. 一根网线，连airbox盒子
+3. 一根网线，连airbox盒子的WAN口
 
 ### 硬件盒airbox
 1. 一根网线，连路由器
@@ -29,6 +30,142 @@
 192.168.31.70  AirBox
 
 ---
+
+## 插入新的内存卡
+### 插卡
+1. 在airbox侧面一个TF卡槽，插进去
+2. 登录进入airbox,输入`lsblk`，得到结果
+```bash
+linaro@Airbox:~$ lsblk
+NAME         MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+mmcblk0      179:0    0 57.6G  0 disk
+├─mmcblk0p1  179:1    0  128M  0 part /boot
+├─mmcblk0p2  179:2    0    3G  0 part /recovery
+├─mmcblk0p3  179:3    0   10M  0 part
+├─mmcblk0p4  179:4    0    3G  0 part /media/root-ro
+├─mmcblk0p5  179:5    0    6G  0 part /media/root-rw
+├─mmcblk0p6  179:6    0    2G  0 part /opt
+└─mmcblk0p7  179:7    0 43.5G  0 part /data
+mmcblk0boot0 179:8    0    4M  1 disk
+mmcblk0boot1 179:16   0    4M  1 disk
+mmcblk1      179:24   0  233G  0 disk
+└─mmcblk1p1  179:25   0  233G  0 part
+```
+说明
+- 系统盘：mmcblk0
+- 新插的 TF 卡：mmcblk1
+- 卡分区：mmcblk1p1
+
+### 挂载
+在 Linux 里：设备 ≠ 文件系统路径，需要手动“把这个设备映射到某个目录”
+#### 确认卡的格式
+输入`lsblk -f`，得到
+```bash
+linaro@Airbox:~$ lsblk -f
+NAME         FSTYPE LABEL UUID                                 FSAVAIL FSUSE% MOUNTPOINT
+mmcblk0
+├─mmcblk0p1  vfat         BF6A-61D9                              34.8M    73% /boot
+├─mmcblk0p2  ext4         1ed9cf38-4010-4a53-a982-518a1a3a97ec    2.7G     2% /recovery
+├─mmcblk0p3
+├─mmcblk0p4  ext4         ddc16b78-6b01-45d0-a384-aadefac8e103  313.5M    84% /media/root-ro
+├─mmcblk0p5  ext4         c83cdb58-0dc1-4590-9be4-7b3dd9386b61  791.6M    82% /media/root-rw
+├─mmcblk0p6  ext4         145e1c67-1225-44dc-8b5d-086f74ddc7fc  421.7M    74% /opt
+└─mmcblk0p7  ext4         7fffb335-a57b-46a0-8284-3d7dfef61009      1G    93% /data
+mmcblk0boot0
+mmcblk0boot1
+mmcblk1
+└─mmcblk1p1  vfat         3219-C816
+```
+看到`mmcblk1p1`是`vfat`
+
+#### 创建挂载目录
+输入
+```bash
+sudo mkdir -p /mnt/sdcard
+```
+意思是：在系统里新建一个目录,以后TF卡内容就从这个目录进去看
+
+#### 先手动挂载一次
+输入
+```bash
+sudo mount -t vfat /dev/mmcblk1p1 /mnt/sdcard
+```
+
+#### 验证挂载是否成功
+输入`df -h`，结果
+```bash
+linaro@Airbox:~$ df -h
+Filesystem      Size  Used Avail Use% Mounted on
+overlay         5.9G  4.8G  792M  87% /
+devtmpfs        951M     0  951M   0% /dev
+tmpfs          1018M     0 1018M   0% /dev/shm
+tmpfs           204M  3.6M  201M   2% /run
+tmpfs           5.0M     0  5.0M   0% /run/lock
+tmpfs          1018M     0 1018M   0% /sys/fs/cgroup
+/dev/mmcblk0p7   43G   40G  1.1G  98% /data
+/dev/mmcblk0p4  2.9G  2.5G  314M  89% /media/root-ro
+/dev/mmcblk0p5  5.9G  4.8G  792M  87% /media/root-rw
+/dev/mmcblk0p6  2.0G  1.5G  422M  78% /opt
+/dev/mmcblk0p2  2.9G   51M  2.8G   2% /recovery
+/dev/mmcblk0p1  128M   93M   35M  73% /boot
+tmpfs           204M     0  204M   0% /run/user/1000
+/dev/mmcblk1p1  233G  256K  233G   1% /mnt/sdcard
+```
+有`/mnt/sdcard`，说明挂载成功
+
+#### 验证卡是否正常
+尝试往卡里写入一个文件，但发现有权限问题
+```bash
+linaro@Airbox:~$ cd /mnt/sdcard
+linaro@Airbox:/mnt/sdcard$ touch test.txt
+touch: cannot touch 'test.txt': Permission denied
+linaro@Airbox:/mnt/sdcard$ sudo touch test.txt
+linaro@Airbox:/mnt/sdcard$ ls
+'System Volume Information'   test.txt
+```
+
+#### 重新挂载（带权限参数）
+1. 先卸载当前挂载
+```bash
+linaro@Airbox:/mnt/sdcard$ sudo umount /mnt/sdcard
+umount: /mnt/sdcard: target is busy.
+```
+2. 提示忙碌，先退出来
+```bash
+linaro@Airbox:/mnt/sdcard$ cd ~
+linaro@Airbox:~$ sudo umount /mnt/sdcard
+```
+3. 用带权限参数的方式重新挂载
+```bash
+sudo mount -t vfat /dev/mmcblk1p1 /mnt/sdcard -o uid=1000,gid=1000,umask=000
+```
+- uid=1000：把文件归给用户 linaro
+- gid=1000：把组也设给 linaro
+- umask=000：允许读写执行
+4. 测试是否成功
+```bash
+linaro@Airbox:~$ cd /mnt/sdcard
+linaro@Airbox:/mnt/sdcard$ touch test2.txt
+linaro@Airbox:/mnt/sdcard$ ls
+'System Volume Information'   test.txt   test2.txt
+```
+
+#### 设置开机自动挂载
+1. 查UUID
+```bash
+linaro@Airbox:/mnt/sdcard$ sudo blkid /dev/mmcblk1p1
+/dev/mmcblk1p1: UUID="3219-C816" TYPE="vfat"
+```
+UUID为`3219-C816`
+2. 尝试使用`fstab`自动挂载，失败（改了`/etc/fstab`后重启没有生效），然后用`rc.local`开机脚本
+3. 在`/etc/rc.local`里加入
+```bash
+mkdir -p /mnt/sdcard
+mount -t vfat /dev/mmcblk1p1 /mnt/sdcard -o uid=1000,gid=1000,umask=000 || true
+```
+放在`exit 0`前面
+4. 重启`sudo reboot`后重新登录，再执行`df -h`，成功看到`/dev/mmcblk1p1  233G  256K  233G   1% /mnt/sdcard`
+
 
 ## 用CasaOS跑模型
 ### 基本操作
