@@ -101,7 +101,7 @@ import shutil
 import socket
 import subprocess
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 
 # 全局常量
 DEVICE_ID = "airbox_01"       
@@ -119,7 +119,7 @@ def read_text_file(path: str) -> Optional[str]:
 
 
 # 执行系统命令，失败时返回 None
-def run_command(cmd: list[str], timeout: int = 3) -> Optional[str]:
+def run_command(cmd: List[str], timeout: int = 3) -> Optional[str]:
     try:
         result = subprocess.run(
             cmd,
@@ -205,7 +205,7 @@ def parse_proc_stat_cpu() -> Optional[Tuple[int, int]]:
 
 
 # 通过两次采样 /proc/stat 计算 CPU 利用率
-def get_cpu_usage_percent(interval: float = 1.0) -> float:
+def get_cpu_usage_percent(interval: float = 0.2) -> float:
     stat1 = parse_proc_stat_cpu()
     if stat1 is None:
         return 0.0
@@ -297,7 +297,7 @@ def get_temperatures() -> Dict[str, float]:
 
 # 从 bm-smi 输出中解析 Tpu-Util
 def get_tpu_util_percent() -> float:
-    output = run_command(BM_SMI_CMD, timeout=5)
+    output = run_command(BM_SMI_CMD, timeout=2)
     if not output:
         return 0.0
 
@@ -437,7 +437,7 @@ from collector import collect_status
 
 
 # ===== 可修改配置 =====
-BROADCAST_IP = "255.255.255.255"   # 通用广播地址，第一版先用它，后续可改成当前网段的广播地址：192.168.31.255
+BROADCAST_IP = "192.168.31.255"   # 通用广播地址为255.255.255.255，后续可改成当前网段的广播地址：192.168.31.255
 BROADCAST_PORT = 5005              # 广播端口（发送端和接收端一致）
 SEND_INTERVAL = 2.0                # 每隔多少秒广播一次
 SOCKET_TIMEOUT = 2.0               # socket 超时时间
@@ -506,6 +506,456 @@ nc -ul 5005
 ```
 
 
+## 模块三：接收
+### 思路
+`receiver.py`支持两类输入：
+1. 收到别的 Airbox 广播来的状态包
+- 自动解析
+- 自动存进本地 peer_table
+- 方便后面做组网节点列表
+2. 收到外部设备发来的命令包
+- 支持这几个命令：ping，get_status，get_peers
+### 代码
+```python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Airbox Task2 - UDP Receiver
+
+功能：
+1. 接收局域网内其他节点广播过来的状态 JSON
+2. 维护一个本地 peer_table（记录最近收到的节点状态）
+3. 接收外部控制命令，并返回响应
+   支持命令：
+   - ping
+   - get_status
+   - get_peers
+
+运行方式：
+    python3 receiver.py
+"""
+
+import json
+import socket
+import time
+from typing import Any, Dict, Optional, Tuple
+
+from collector import collect_status
+
+
+# ===== 可修改配置 =====
+LISTEN_IP = "0.0.0.0"     # 监听所有网卡，写成某个具体IP就只监听那个地址
+LISTEN_PORT = 5005        # 与 broadcaster.py 保持一致，便于接收广播
+BUFFER_SIZE = 4096        # 一次最多接收4096字节
+SOCKET_TIMEOUT = 1.0
+PEER_EXPIRE_SECONDS = 10  # 超过这个时间没更新，就认为该节点暂时失活
+# =====================
+
+
+#  创建 UDP 接收 socket
+def create_udp_receiver_socket() -> socket.socket:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((LISTEN_IP, LISTEN_PORT))
+    sock.settimeout(SOCKET_TIMEOUT)
+    return sock
+
+
+# 将收到的字节串解码成 JSON 对象
+def decode_json_bytes(data: bytes) -> Optional[Dict[str, Any]]:   
+    try:
+        text = data.decode("utf-8")
+        obj = json.loads(text)     
+        if isinstance(obj, dict):   # 协议设计里默认收到的包应该是一个 JSON 对象，也就是字典
+            return obj
+        return None
+    except Exception:    # 解码失败或者JSON格式错了
+        return None
+
+
+# 发送 JSON 响应
+def send_json(sock: socket.socket, payload: Dict[str, Any], addr: Tuple[str, int]) -> None:
+    try:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        sock.sendto(data, addr)
+    except Exception:
+        pass
+
+
+    """
+    判断是否是状态包（来自 broadcaster / 其他节点）
+    只要有 device_id 和 timestamp，就先视为状态包
+    """
+def is_status_packet(obj: Dict[str, Any]) -> bool:
+    return ("device_id" in obj) and ("timestamp" in obj)
+
+
+# 判断是否是命令包
+def is_command_packet(obj: Dict[str, Any]) -> bool:
+    return "command" in obj
+
+
+# 删除超时未更新的节点
+def prune_expired_peers(peer_table: Dict[str, Dict[str, Any]]) -> None:
+    now = time.time()
+    expired = []
+
+    for device_id, info in peer_table.items():
+        last_seen = info.get("_last_seen_local", 0)
+        if now - last_seen > PEER_EXPIRE_SECONDS:
+            expired.append(device_id)
+
+    for device_id in expired:
+        del peer_table[device_id]
+
+
+# 处理来自其他节点的状态广播
+def handle_status_packet(
+    obj: Dict[str, Any],
+    addr: Tuple[str, int],
+    peer_table: Dict[str, Dict[str, Any]],
+) -> None:
+
+    device_id = str(obj.get("device_id", "unknown"))
+
+    # 给本地维护用的信息
+    peer_info = dict(obj)
+    peer_info["_sender_ip"] = addr[0]
+    peer_info["_sender_port"] = addr[1]
+    peer_info["_last_seen_local"] = time.time()
+
+    peer_table[device_id] = peer_info
+
+    print(f"[PEER] device_id={device_id} from={addr}")
+    print(json.dumps(obj, ensure_ascii=False))
+
+
+# 处理外部命令
+def handle_command_packet(
+    obj: Dict[str, Any],
+    addr: Tuple[str, int],
+    sock: socket.socket,
+    peer_table: Dict[str, Dict[str, Any]],
+) -> None:
+
+    command = str(obj.get("command", "")).strip()
+
+    if command == "ping":
+        reply = {
+            "msg_type": "pong",
+            "timestamp": int(time.time()),
+            "status": "online",
+        }
+        send_json(sock, reply, addr)
+        print(f"[CMD] ping from {addr} -> pong")
+
+    elif command == "get_status":
+        reply = {
+            "msg_type": "status_reply",
+            "timestamp": int(time.time()),
+            "status": collect_status(),
+        }
+        send_json(sock, reply, addr)
+        print(f"[CMD] get_status from {addr} -> status_reply")
+
+    elif command == "get_peers":
+        # 返回对外可见的 peer_table，去掉内部字段
+        peers_out = {}
+        for device_id, info in peer_table.items():
+            clean_info = dict(info)
+            clean_info.pop("_last_seen_local", None)  # 去掉内部维护字段
+            peers_out[device_id] = clean_info
+
+        reply = {
+            "msg_type": "peer_table_reply",
+            "timestamp": int(time.time()),
+            "peer_count": len(peers_out),
+            "peers": peers_out,
+        }
+        send_json(sock, reply, addr)
+        print(f"[CMD] get_peers from {addr} -> peer_table_reply")
+
+# 不支持的命令
+    else:
+        reply = {
+            "msg_type": "error",
+            "timestamp": int(time.time()),
+            "error": f"unsupported command: {command}",
+            "supported_commands": ["ping", "get_status", "get_peers"],
+        }
+        send_json(sock, reply, addr)
+        print(f"[CMD] unsupported command from {addr}: {command}")
+
+
+def main() -> None:
+    sock = create_udp_receiver_socket()
+    peer_table: Dict[str, Dict[str, Any]] = {}
+
+    print(f"UDP receiver started on {LISTEN_IP}:{LISTEN_PORT}")
+
+# 开始异常保护，后面支持 Ctrl+C 退出
+    try:
+        while True:
+            prune_expired_peers(peer_table)  # 每轮循环先清理一下超时节点
+
+            try:
+                data, addr = sock.recvfrom(BUFFER_SIZE)
+            except socket.timeout:
+                continue
+            except Exception as e:
+                print(f"[ERROR] recvfrom failed: {e}")
+                continue
+
+            # 解码数据
+            obj = decode_json_bytes(data)
+            if obj is None:
+                print(f"[WARN] invalid JSON from {addr}")
+                continue
+
+            # 判断数据类型并分流
+            if is_command_packet(obj):
+                handle_command_packet(obj, addr, sock, peer_table)
+            elif is_status_packet(obj):
+                handle_status_packet(obj, addr, peer_table)
+            else:
+                print(f"[WARN] unknown packet type from {addr}")
+                print(json.dumps(obj, ensure_ascii=False))
+
+    # 按 Ctrl + C，程序会抛出 KeyboardInterrupt
+    except KeyboardInterrupt:
+        print("\nReceiver stopped by user.")
+    finally:
+        sock.close()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+
+## 盒子测试
+### 写入代码
+1. 安装nano编辑器
+```bash
+sudo apt update
+sudo apt install -y nano
+```
+装完后检查
+```bash
+nano --version
+```
+
+2. 创建目录
+```bash
+mkdir -p ~/airbox_task2
+cd ~/airbox_task2
+```
+
+3. 创建函数文件
+```bash
+nano collector.py
+```
+保存退出
+- ctrl + o
+- 回车 enter
+- ctrl + x
+
+4. 同理创建
+```bash
+nano broadcaster.py
+```
+```bash
+nano receiver.py
+```
+
+5. 做语法检查
+```bash
+python3 -m py_compile collector.py broadcaster.py receiver.py
+```
+没有输出，说明没问题
+
+### 第一次测试
+#### 采集模块
+1. 用一段一次性脚本跑
+```bash
+python3 - <<'PY'
+from collector import *
+
+print("hostname =", get_hostname())
+print("ip_address =", get_ip_address())
+print("timestamp =", get_timestamp())
+print("uptime_seconds =", get_uptime_seconds())
+print("cpu_usage_percent =", get_cpu_usage_percent())
+print("memory_usage_percent =", get_memory_usage_percent())
+print("load_avg_1min =", get_load_avg_1min())
+print("sdcard_usage_percent =", get_sdcard_usage_percent())
+print("temperatures =", get_temperatures())
+print("tpu_util_percent =", get_tpu_util_percent())
+print("net_dev_stats =", get_net_dev_stats())
+print("collect_status =", collect_status())
+PY
+```
+结果为
+```bash
+hostname = Airbox
+ip_address = 192.168.31.70
+timestamp = 1776176175
+uptime_seconds = 1327.45
+cpu_usage_percent = 0.62
+memory_usage_percent = 41.46
+load_avg_1min = 0.12
+sdcard_usage_percent = 0.0
+temperatures = {'temperature_zone0_c': 41.0, 'temperature_zone1_c': 56.0}
+tpu_util_percent = 0.0
+net_dev_stats = {'rx_bytes': 1881177, 'tx_bytes': 266572}
+collect_status = {'device_id': 'airbox_01', 'hostname': 'Airbox', 'ip_address': '192.168.31.70', 'timestamp': 1776176181, 'uptime_seconds': 1333.47, 'cpu_usage_percent': 0.12, 'memory_usage_percent': 41.46, 'load_avg_1min': 0.11, 'sdcard_usage_percent': 0.0, 'tpu_util_percent': 0.0, 'eth0_rx_bytes': 1881177, 'eth0_tx_bytes': 266726, 'status': 'online', 'temperature_zone0_c': 41.0, 'temperature_zone1_c': 56.0}
+```
+
+#### 广播模块
+1. 运行
+```bash
+cd ~/airbox_task2
+python3 broadcaster.py
+```
+2. 得到：
+```bash
+linaro@Airbox:~/airbox_task2$ python3 broadcaster.py
+UDP broadcaster started. target=('192.168.31.255', 5005), interval=2.0s
+[SEND] 394 bytes -> ('192.168.31.255', 5005)
+{"device_id": "airbox_01", "hostname": "Airbox", "ip_address": "192.168.31.70", "timestamp": 1776176593, "uptime_seconds": 1745.53, "cpu_usage_percent": 0.12, "memory_usage_percent": 41.47, "load_avg_1min": 0.0, "sdcard_usage_percent": 0.0, "tpu_util_percent": 0.0, "eth0_rx_bytes": 1886577, "eth0_tx_bytes": 277105, "status": "online", "temperature_zone0_c": 41.0, "temperature_zone1_c": 57.0}
+[SEND] 394 bytes -> ('192.168.31.255', 5005)
+{"device_id": "airbox_01", "hostname": "Airbox", "ip_address": "192.168.31.70", "timestamp": 1776176601, "uptime_seconds": 1753.55, "cpu_usage_percent": 0.12, "memory_usage_percent": 41.47, "load_avg_1min": 0.0, "sdcard_usage_percent": 0.0, "tpu_util_percent": 0.0, "eth0_rx_bytes": 1886839, "eth0_tx_bytes": 278331, "status": "online", "temperature_zone0_c": 41.0, "temperature_zone1_c": 57.0}
+[SEND] 393 bytes -> ('192.168.31.255', 5005)
+{"device_id": "airbox_01", "hostname": "Airbox", "ip_address": "192.168.31.70", "timestamp": 1776176609, "uptime_seconds": 1761.56, "cpu_usage_percent": 0.0, "memory_usage_percent": 41.48, "load_avg_1min": 0.0, "sdcard_usage_percent": 0.0, "tpu_util_percent": 0.0, "eth0_rx_bytes": 1886899, "eth0_tx_bytes": 279297, "status": "online", "temperature_zone0_c": 41.0, "temperature_zone1_c": 57.0}
+^C
+Broadcaster stopped by user.
+```
+可见有持续在发送，`ctrl+c`可退出
+
+#### 接收模块
+1. 在原终端运行广播端`python3 broadcaster.py`
+2. 新开一个终端，登录进入airbox，运行接收端
+```bash
+cd ~/airbox_task2
+python3 receiver.py
+```
+3. 结果
+<img src="./image-9.png" width="350">
+
+#### 测试节点表的查询
+1. 打开第三个终端，登录进入airbox
+2. 发送一个`get_peers`命令：
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import json, socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(3)
+
+sock.sendto(json.dumps({"command": "get_peers"}).encode("utf-8"), ("127.0.0.1", 5005))
+data, addr = sock.recvfrom(4096)
+
+print("from:", addr)
+print(data.decode("utf-8"))
+PY
+```
+3. 结果为：
+```bash
+from: ('127.0.0.1', 5005)
+{"msg_type": "peer_table_reply", "timestamp": 1776177600, "peer_count": 1, "peers": {"airbox_01": {"device_id": "airbox_01", "hostname": "Airbox", "ip_address": "192.168.31.70", "timestamp": 1776177588, "uptime_seconds": 2740.92, "cpu_usage_percent": 0.25, "memory_usage_percent": 42.67, "load_avg_1min": 0.0, "sdcard_usage_percent": 0.0, "tpu_util_percent": 0.0, "eth0_rx_bytes": 2712093, "eth0_tx_bytes": 384163, "status": "online", "temperature_zone0_c": 41.0, "temperature_zone1_c": 57.0, "_sender_ip": "192.168.31.70", "_sender_port": 42033}}}
+```
+
+#### 测试命令接收
+1. 在第三个终端进入airbox
+2. 执行：
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import json, socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(3)
+
+sock.sendto(json.dumps({"command": "ping"}).encode("utf-8"), ("127.0.0.1", 5005))
+data, addr = sock.recvfrom(4096)
+
+print("from:", addr)
+print(data.decode("utf-8"))
+PY
+```
+3. 返回：
+```bash
+from: ('127.0.0.1', 5005)
+{"msg_type": "pong", "timestamp": 1776177957, "status": "online"}
+```
+
+#### 测试状态接收
+1. 在第三个终端进入airbox后输入
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import json, socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(5)
+
+sock.sendto(json.dumps({"command": "get_status"}).encode("utf-8"), ("127.0.0.1", 5005))
+data, addr = sock.recvfrom(4096)
+
+print("from:", addr)
+print(data.decode("utf-8"))
+PY
+```
+2. 结果，超时，失败
+```bash
+Traceback (most recent call last):
+  File "<stdin>", line 7, in <module>
+socket.timeout: timed out
+```
+
+3. 在测试脚本中，去掉超时时间设定，先测耗时，执行
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import time
+from collector import collect_status
+
+t0 = time.time()
+status = collect_status()
+t1 = time.time()
+
+print("elapsed =", round(t1 - t0, 3), "seconds")
+PY
+```
+输出
+```bash
+elapsed = 6.012 seconds
+```
+确实是超过设定的5秒了
+
+4. 将超时设定为10秒，重新跑
+```bash
+python3 - <<'PY'
+import json, socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(10)
+
+sock.sendto(json.dumps({"command": "get_status"}).encode("utf-8"), ("127.0.0.1", 5005))
+data, addr = sock.recvfrom(4096)
+
+print("from:", addr)
+print(data.decode("utf-8"))
+PY
+```
+
+5. 成功了
+```bash
+from: ('127.0.0.1', 5005)
+{"msg_type": "status_reply", "timestamp": 1776178630, "status": {"device_id": "airbox_01", "hostname": "Airbox", "ip_address": "192.168.31.70", "timestamp": 1776178630, "uptime_seconds": 3783.04, "cpu_usage_percent": 0.5, "memory_usage_percent": 42.99, "load_avg_1min": 0.14, "sdcard_usage_percent": 0.0, "tpu_util_percent": 0.0, "eth0_rx_bytes": 2792572, "eth0_tx_bytes": 651410, "status": "online", "temperature_zone0_c": 42.0, "temperature_zone1_c": 58.0}}
+```
 
 
 
