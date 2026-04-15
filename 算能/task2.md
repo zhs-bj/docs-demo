@@ -2,10 +2,6 @@
 实现单个Airbox的底层数据调取，包括，同时实现此Airbox的向外数据广播和接受外界数据功能，一位老师负责
 预期ddl：4/22
 
-## 参考资料
-1. 
-2. 
-
 ## 模块一：状态采集
 ### 模块描述
 1. 采用 Linux 内核提供的 procfs 与 sysfs 接口进行状态采集。其中：
@@ -733,6 +729,95 @@ if __name__ == "__main__":
     main()
 ```
 
+## 重构方案：拆成多级函数文件
+原来的 `collector.py`、`broadcaster.py`、`receiver.py` 都是“入口 + 业务逻辑 + 工具函数”混在一个文件里。后续如果继续加指标、加命令、加协议字段，单个文件会越来越长，所以可以保留三个入口文件，但把真正的功能拆进 `airbox_task2` 包里。
+
+我已经按这个结构整理了一份示例代码，放在本仓库：
+
+```text
+算能/airbox_task2_refactor/
+├── collector.py                 # 采集入口，只调用 collector.service.main()
+├── broadcaster.py               # 广播入口，只调用 broadcast.service.main()
+├── receiver.py                  # 接收入口，只调用 receiver.service.main()
+└── airbox_task2/
+    ├── config.py                # 全局配置：设备 ID、端口、网卡、广播地址
+    ├── utils/
+    │   ├── files.py             # 读取 /proc、/sys 文本文件
+    │   ├── commands.py          # 执行 bm-smi、ip addr 等系统命令
+    │   └── json_codec.py        # JSON 编码 / 解码
+    ├── collector/
+    │   ├── identity.py          # hostname、IP 地址
+    │   ├── system.py            # CPU、内存、负载、运行时间、在线状态
+    │   ├── hardware.py          # TF 卡、温度、TPU 利用率
+    │   ├── network.py           # eth0 收发字节数
+    │   └── service.py           # collect_status() 总装函数
+    ├── broadcast/
+    │   ├── socket_utils.py      # UDP 广播 socket、sendto
+    │   └── service.py           # 周期采集并广播
+    └── receiver/
+        ├── socket_utils.py      # UDP 接收 socket、JSON 回复
+        ├── protocol.py          # 判断状态包 / 命令包
+        ├── peers.py             # peer_table 更新、过期清理、对外输出
+        ├── commands.py          # ping / get_status / get_peers
+        └── service.py           # 接收主循环
+```
+
+这样拆分后，每一层职责更清楚：
+
+|层级|文件|职责|
+|---|---|---|
+|入口层|`collector.py`、`broadcaster.py`、`receiver.py`|只负责启动程序，方便保持原来的运行命令不变|
+|配置层|`airbox_task2/config.py`|集中修改设备 ID、端口、网卡、广播地址|
+|工具层|`airbox_task2/utils/*`|文件读取、命令执行、JSON 编解码|
+|采集层|`airbox_task2/collector/*`|按数据来源拆分：系统、硬件、网络、身份信息|
+|广播层|`airbox_task2/broadcast/*`|创建广播 socket，周期发送状态包|
+|接收层|`airbox_task2/receiver/*`|协议判断、节点表维护、命令处理、接收循环|
+
+### 在 Airbox 上写入文件
+如果采用重构版本，目录创建方式改为：
+
+```bash
+mkdir -p ~/airbox_task2/airbox_task2/utils
+mkdir -p ~/airbox_task2/airbox_task2/collector
+mkdir -p ~/airbox_task2/airbox_task2/broadcast
+mkdir -p ~/airbox_task2/airbox_task2/receiver
+cd ~/airbox_task2
+```
+
+然后把 `算能/airbox_task2_refactor/` 里面的文件复制到 Airbox 的 `~/airbox_task2/` 下。
+
+### 语法检查
+重构后需要检查整个包：
+
+```bash
+cd ~/airbox_task2
+python3 -m py_compile \
+  collector.py broadcaster.py receiver.py \
+  airbox_task2/config.py \
+  airbox_task2/utils/*.py \
+  airbox_task2/collector/*.py \
+  airbox_task2/broadcast/*.py \
+  airbox_task2/receiver/*.py
+```
+
+### 运行方式
+入口命令保持不变：
+
+```bash
+python3 collector.py
+python3 broadcaster.py
+python3 receiver.py
+```
+
+### 后续扩展方式
+如果后面要增加新的采集指标，优先放到对应的小文件里：
+
+- 新增系统指标：放到 `airbox_task2/collector/system.py`
+- 新增硬件指标：放到 `airbox_task2/collector/hardware.py`
+- 新增网络指标：放到 `airbox_task2/collector/network.py`
+- 新增接收命令：在 `airbox_task2/receiver/commands.py` 里加一个 `build_xxx_reply()`，再在 `handle_command_packet()` 里加分支
+- 新增包类型：在 `airbox_task2/receiver/protocol.py` 里加判断函数，再在 `receiver/service.py` 的 `handle_packet()` 里分流
+
 
 ## 盒子测试
 ### 写入代码
@@ -956,6 +1041,580 @@ PY
 from: ('127.0.0.1', 5005)
 {"msg_type": "status_reply", "timestamp": 1776178630, "status": {"device_id": "airbox_01", "hostname": "Airbox", "ip_address": "192.168.31.70", "timestamp": 1776178630, "uptime_seconds": 3783.04, "cpu_usage_percent": 0.5, "memory_usage_percent": 42.99, "load_avg_1min": 0.14, "sdcard_usage_percent": 0.0, "tpu_util_percent": 0.0, "eth0_rx_bytes": 2792572, "eth0_tx_bytes": 651410, "status": "online", "temperature_zone0_c": 42.0, "temperature_zone1_c": 58.0}}
 ```
+
+6. 把`collector.py`中cpu采集时间和tpu采集时间缩短后，
+```bash
+hostname = Airbox
+ip_address = 192.168.31.70
+timestamp = 1776179235
+uptime_seconds = 86.53
+cpu_usage_percent = 2.5
+memory_usage_percent = 40.55
+load_avg_1min = 0.8
+sdcard_usage_percent = 0.0
+temperatures = {'temperature_zone0_c': 31.0, 'temperature_zone1_c': 41.0}
+tpu_util_percent = 0.0
+net_dev_stats = {'rx_bytes': 33786, 'tx_bytes': 32954}
+collect_status = {'device_id': 'airbox_01', 'hostname': 'Airbox', 'ip_address': '192.168.31.70', 'timestamp': 1776179238, 'uptime_seconds': 88.76, 'cpu_usage_percent': 0.25, 'memory_usage_percent': 40.59, 'load_avg_1min': 0.8, 'sdcard_usage_percent': 0.0, 'tpu_util_percent': 0.0, 'eth0_rx_bytes': 33786, 'eth0_tx_bytes': 33100, 'status': 'online', 'temperature_zone0_c': 31.0, 'temperature_zone1_c': 41.0}
+```
+
+### 第二次测试
+经过下面“衔接任务分配”的代码修改后，新增了测试参数和task_request，再对盒子进行测试
+#### 测试 TPU 内存解析函数
+测试能否把脚本里的sample解析正确
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+from airbox_task2.collector.hardware import parse_tpu_memory_usage_percent
+
+samples = [
+    "Memory-Usage 0MB/13311MB",
+    "Memory-Usage 2048MB/13311MB",
+    "bad output",
+]
+
+for s in samples:
+    print(s, "=>", parse_tpu_memory_usage_percent(s))
+PY
+```
+得到，符合期望。-1表示没有解析到`Memory-Usage`
+```bash
+Memory-Usage 0MB/13311MB => 0.0
+Memory-Usage 2048MB/13311MB => 15.39
+bad output => -1.0
+```
+
+#### 测试采集函数 collect_status()
+运行
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import json
+from airbox_task2.collector.service import collect_status
+
+status = collect_status()
+print(json.dumps(status, ensure_ascii=False, indent=2))
+PY
+```
+输出，关键字段都在
+```bash
+{
+  "device_id": "airbox_01",
+  "hostname": "Airbox",
+  "ip_address": "192.168.31.70",
+  "timestamp": 1776250857,
+  "uptime_seconds": 1760.67,
+  "cpu_usage_percent": 0.12,
+  "memory_usage_percent": 41.36,
+  "load_avg_1min": 0.03,
+  "sdcard_usage_percent": 0.0,
+  "tpu_util_percent": 0.0,
+  "mem_util_percent": 41.36,
+  "fps_input": 0.0,
+  "queue_length": 0,
+  "available_capacity": 0.876,
+  "capabilities": [
+    "cv"
+  ],
+  "eth0_rx_bytes": 1612691,
+  "eth0_tx_bytes": 240450,
+  "status": "online",
+  "temperature_zone0_c": 42.0,
+  "temperature_zone1_c": 58.0,
+  "health_state": "AVAILABLE"
+}
+```
+
+#### 测试 collector.py
+看输出的JSON是否正常。运行
+```bash
+python3 collector.py
+```
+持续输出，
+```bash
+Airbox collector started. Press Ctrl+C to stop.
+{"device_id": "airbox_01", "hostname": "Airbox", "ip_address": "192.168.31.70", "timestamp": 1776251147, "uptime_seconds": 2050.27, "cpu_usage_percent": 0.0, "memory_usage_percent": 41.35, "load_avg_1min": 0.0, "sdcard_usage_percent": 0.0, "tpu_util_percent": 0.0, "mem_util_percent": 41.35, "fps_input": 0.0, "queue_length": 0, "available_capacity": 0.876, "capabilities": ["cv"], "eth0_rx_bytes": 1651057, "eth0_tx_bytes": 257961, "status": "online", "temperature_zone0_c": 42.0, "temperature_zone1_c": 58.0, "health_state": "AVAILABLE"}
+```
+可见输出JSON中已包含新加入的字段
+```text
+mem_util_percent
+fps_input
+queue_length
+health_state
+available_capacity
+capabilities
+```
+
+#### 测试 receiver.py 启动
+在第一个终端，运行
+```bash
+cd ~/airbox_task2
+python3 receiver.py
+```
+输出
+```bash
+UDP receiver started on 0.0.0.0:5005
+```
+留着不关，为了后续测试
+
+#### 测试 get_status 命令
+新开第二个终端，运行
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import json
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(15)
+
+sock.sendto(json.dumps({"command": "get_status"}).encode("utf-8"), ("127.0.0.1", 5005))
+data, addr = sock.recvfrom(8192)
+
+reply = json.loads(data.decode("utf-8"))
+
+print("from:", addr)
+print(json.dumps(reply, ensure_ascii=False, indent=2))
+
+status = reply.get("status", {})
+print("\n关键新增字段：")
+for key in [
+    "mem_util_percent",
+    "fps_input",
+    "queue_length",
+    "health_state",
+    "available_capacity",
+    "capabilities",
+]:
+    print(key, "=", status.get(key))
+PY
+```
+得到
+```bash
+from: ('127.0.0.1', 5005)
+{
+  "msg_type": "status_reply",
+  "timestamp": 1776251323,
+  "status": {
+    "device_id": "airbox_01",
+    "hostname": "Airbox",
+    "ip_address": "192.168.31.70",
+    "timestamp": 1776251327,
+    "uptime_seconds": 2230.69,
+    "cpu_usage_percent": 0.0,
+    "memory_usage_percent": 41.93,
+    "load_avg_1min": 0.0,
+    "sdcard_usage_percent": 0.0,
+    "tpu_util_percent": 0.0,
+    "mem_util_percent": 41.93,
+    "fps_input": 0.0,
+    "queue_length": 0,
+    "available_capacity": 0.874,
+    "capabilities": [
+      "cv"
+    ],
+    "eth0_rx_bytes": 1662468,
+    "eth0_tx_bytes": 277386,
+    "status": "online",
+    "temperature_zone0_c": 42.0,
+    "temperature_zone1_c": 58.0,
+    "health_state": "AVAILABLE"
+  }
+}
+
+关键新增字段：
+mem_util_percent = 41.93
+fps_input = 0.0
+queue_length = 0
+health_state = AVAILABLE
+available_capacity = 0.874
+capabilities = ['cv']
+```
+成功get新增关键字的status
+
+#### 测试 broadcaster.py 广播
+在第二个终端
+```bash
+python3 broadcaster.py
+```
+结果不列出来了，在broadcaster端广播的JSON中含有新增的关键字段，在receiver端接收的JSON里面也有，测试成功。
+
+#### 测试 get_peers
+先确保
+```text
+receiver.py 正在运行
+broadcaster.py 已经至少发送过一次
+如果超过 PEER_EXPIRE_SECONDS = 10 秒没有收到广播，peer 会被清掉。所以测试 get_peers 前最好刚刚运行过 broadcaster.py
+```
+在broadcaster端的终端运行
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import json
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(10)
+
+sock.sendto(json.dumps({"command": "get_peers"}).encode("utf-8"), ("127.0.0.1", 5005))
+data, addr = sock.recvfrom(8192)
+
+reply = json.loads(data.decode("utf-8"))
+
+print("from:", addr)
+print(json.dumps(reply, ensure_ascii=False, indent=2))
+
+print("\n节点数量:", reply.get("peer_count"))
+peers = reply.get("peers", {})
+
+for device_id, info in peers.items():
+    print("\n设备:", device_id)
+    for key in [
+        "mem_util_percent",
+        "fps_input",
+        "queue_length",
+        "health_state",
+        "available_capacity",
+        "capabilities",
+    ]:
+        print(key, "=", info.get(key))
+PY
+```
+
+得到
+```bash
+from: ('127.0.0.1', 5005)
+{
+  "msg_type": "peer_table_reply",
+  "timestamp": 1776251631,
+  "peer_count": 1,
+  "peers": {
+    "airbox_01": {
+      "device_id": "airbox_01",
+      "hostname": "Airbox",
+      "ip_address": "192.168.31.70",
+      "timestamp": 1776251623,
+      "uptime_seconds": 2526.31,
+      "cpu_usage_percent": 0.5,
+      "memory_usage_percent": 42.81,
+      "load_avg_1min": 0.01,
+      "sdcard_usage_percent": 0.0,
+      "tpu_util_percent": 0.0,
+      "mem_util_percent": 42.81,
+      "fps_input": 0.0,
+      "queue_length": 0,
+      "available_capacity": 0.872,
+      "capabilities": [
+        "cv"
+      ],
+      "eth0_rx_bytes": 2444244,
+      "eth0_tx_bytes": 364797,
+      "status": "online",
+      "temperature_zone0_c": 42.0,
+      "temperature_zone1_c": 58.0,
+      "health_state": "AVAILABLE",
+      "_sender_ip": "192.168.31.70",
+      "_sender_port": 55251
+    }
+  }
+}
+
+节点数量: 1
+
+设备: airbox_01
+mem_util_percent = 42.81
+fps_input = 0.0
+queue_length = 0
+health_state = AVAILABLE
+available_capacity = 0.872
+capabilities = ['cv']
+```
+同时在receiver端有
+```bash
+[CMD] get_peers from ('127.0.0.1', 51549) -> peer_table_reply
+```
+
+#### 测试 task_request / bid_response 协议
+确保 receiver 正在运行，然后第二个终端执行：
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import json
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(15)
+
+payload = {
+    "msg_type": "task_request",
+    "task_id": "task_001",
+    "task_type": "cv",
+    "priority": 5,
+    "deadline_ms": 300
+}
+
+sock.sendto(json.dumps(payload).encode("utf-8"), ("127.0.0.1", 5005))
+data, addr = sock.recvfrom(8192)
+
+reply = json.loads(data.decode("utf-8"))
+
+print("from:", addr)
+print(json.dumps(reply, ensure_ascii=False, indent=2))
+PY
+```
+返回
+```bash
+from: ('127.0.0.1', 5005)
+{
+  "msg_type": "bid_response",
+  "timestamp": 1776251958,
+  "device_id": "airbox_01",
+  "task_id": "task_001",
+  "task_type": "cv",
+  "priority": 5,
+  "deadline_ms": 300,
+  "estimated_latency_ms": 127,
+  "score": 0.873,
+  "can_handle": true,
+  "health_state": "AVAILABLE",
+  "available_capacity": 0.873
+}
+```
+在receiver端有
+```bash
+[TASK] task_request from ('127.0.0.1', 57742) -> bid_response
+```
+
+#### 测试不支持的 task_type
+将`task_type`改为`llm`
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import json
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(15)
+
+payload = {
+    "msg_type": "task_request",
+    "task_id": "task_002",
+    "task_type": "llm",
+    "priority": 5,
+    "deadline_ms": 300
+}
+
+sock.sendto(json.dumps(payload).encode("utf-8"), ("127.0.0.1", 5005))
+data, addr = sock.recvfrom(8192)
+
+reply = json.loads(data.decode("utf-8"))
+
+print("from:", addr)
+print(json.dumps(reply, ensure_ascii=False, indent=2))
+PY
+```
+返回的关键部分
+```bash
+"task_type": "llm",
+"score": 0.0,
+"can_handle": false,
+```
+
+#### 测试不支持的command
+运行
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import json
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(5)
+
+sock.sendto(json.dumps({"command": "hello"}).encode("utf-8"), ("127.0.0.1", 5005))
+data, addr = sock.recvfrom(4096)
+
+print("from:", addr)
+print(data.decode("utf-8"))
+PY
+```
+返回
+```bash
+from: ('127.0.0.1', 5005)
+{"msg_type": "error", "timestamp": 1776252351, "error": "unsupported command: hello", "supported_commands": ["ping", "get_status", "get_peers"]}
+```
+receiver端也有输出
+```bash
+[CMD] unsupported command from ('127.0.0.1', 59762): hello
+```
+
+#### 测试非法 JSON
+运行
+```bash
+cd ~/airbox_task2
+python3 - <<'PY'
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.sendto(b"not json data", ("127.0.0.1", 5005))
+print("sent invalid json")
+PY
+```
+在receiver端显示
+```bash
+[WARN] invalid JSON from ('127.0.0.1', 34959)
+```
+
+## 优化
+### 代码结构
+1. 原来只有三个冗长的函数，结构不清晰
+2. 我让Codex重新整理一遍代码结构，于是
+```text
+~/airbox_task2/
+├── collector.py
+├── broadcaster.py
+├── receiver.py
+└── airbox_task2/
+    ├── __init__.py
+    ├── config.py
+    ├── utils/
+    │   ├── __init__.py
+    │   ├── files.py
+    │   ├── commands.py
+    │   └── json_codec.py
+    ├── collector/
+    │   ├── __init__.py
+    │   ├── identity.py
+    │   ├── system.py
+    │   ├── hardware.py
+    │   ├── network.py
+    │   └── service.py
+    ├── broadcast/
+    │   ├── __init__.py
+    │   ├── socket_utils.py
+    │   └── service.py
+    └── receiver/
+        ├── __init__.py
+        ├── socket_utils.py
+        ├── protocol.py
+        ├── peers.py
+        ├── commands.py
+        └── service.py
+```
+
+#### 传给airbox
+用`scp`把整个代码文件夹传到airbox
+1. 进入电脑上的项目目录：
+在电脑的powershell里执行：
+```powershell
+cd "D:\igem\网站搭建\docs-demo\算能"
+```
+确认`dir`下有`airbox_task2`文件夹
+
+2. 新建目录，传到airbox
+```powershell
+scp -r ".\airbox_task2" "linaro@192.168.31.70:~/airbox_task2_new"
+```
+解释，这里：
+```text
+scp        远程复制命令
+-r         递归复制整个文件夹
+.\airbox_task2    你电脑上的代码文件夹
+linaro@192.168.31.70    Airbox 用户名和 IP
+~/airbox_task2_new      传到 Airbox 后的目录名
+```
+3. 登录airbox检查文件
+进入airbox后执行`ls~`，能看到`airbox_task2_new`，再检查里面的结构
+```bash
+cd ~/airbox_task2_new
+find . -maxdepth 3 -type f | sort
+```
+能看到
+```bash
+./__pycache__/broadcaster.cpython-313.pyc
+./__pycache__/collector.cpython-313.pyc
+./__pycache__/collector.cpython-313.pyc.2521483976400
+./__pycache__/receiver.cpython-313.pyc
+./airbox_task2/__init__.py
+./airbox_task2/__pycache__/__init__.cpython-313.pyc
+./airbox_task2/__pycache__/config.cpython-313.pyc
+./airbox_task2/broadcast/__init__.py
+./airbox_task2/broadcast/service.py
+./airbox_task2/broadcast/socket_utils.py
+./airbox_task2/collector/__init__.py
+./airbox_task2/collector/hardware.py
+./airbox_task2/collector/identity.py
+./airbox_task2/collector/network.py
+./airbox_task2/collector/service.py
+./airbox_task2/collector/system.py
+./airbox_task2/config.py
+./airbox_task2/receiver/__init__.py
+./airbox_task2/receiver/commands.py
+./airbox_task2/receiver/peers.py
+./airbox_task2/receiver/protocol.py
+./airbox_task2/receiver/service.py
+./airbox_task2/receiver/socket_utils.py
+./airbox_task2/utils/__init__.py
+./airbox_task2/utils/commands.py
+./airbox_task2/utils/files.py
+./airbox_task2/utils/json_codec.py
+./broadcaster.py
+./collector.py
+./receiver.py
+```
+4. 替换旧目录
+先备份旧的（其实也可以删了）
+```bash
+mv ~/airbox_task2 ~/airbox_task2_backup
+```
+然后把新目录改名
+```bash
+mv ~/airbox_task2_new ~/airbox_task2
+```
+
+### 衔接任务分配
+#### 新增参数
+| 新增测量参数 | 所属类别 | 含义 | 当前获取方式 | 是否真实测量 | 后续改进方向 |
+|---|---|---|---|---|---|
+| `mem_util_percent` | 加速器状态参数 | TPU / 加速器侧内存占用率 | 从 `bm-smi` 的 `Memory-Usage` 字段解析，例如 `0MB/13311MB`，计算 `used / total * 100` | 是，基于 `bm-smi` 真实输出 | 如果后续 `bm-smi` 输出格式变化，需要调整解析函数 |
+| `fps_input` | 任务输入参数 | 当前节点输入任务速率 / 输入帧率 | 当前从配置常量 `DEFAULT_FPS_INPUT` 读取，默认 `0.0` | 否，占位字段 | 后续接入摄像头、视频流或任务输入管线后，在程序中实时统计 FPS |
+| `queue_length` | 任务负载参数 | 当前待处理任务数 / 任务队列长度 | 当前从配置常量 `DEFAULT_QUEUE_LENGTH` 读取，默认 `0` | 否，占位字段 | 后续接入真实任务队列后，用 `queue.qsize()` 或实际队列长度替换 |
+| `health_state` | 节点健康状态参数 | 节点当前是否适合继续接任务 | 根据温度、CPU 利用率、TPU 利用率、加速器内存占用率、队列长度综合判断 | 是，基于已有测量值计算 | 后续可根据实测情况调整阈值和状态分类 |
+| `available_capacity` | 节点剩余能力参数 | 当前节点剩余接活能力，范围 `0~1` | 根据 `tpu_util_percent`、`mem_util_percent`、`queue_length` 启发式估算 | 否，计算估算值 | 后续可替换为正式任务分配评分公式 |
+| `capabilities` | 节点能力参数 | 当前节点支持的任务类型列表，例如 `["cv"]` | 从配置常量 `CAPABILITIES` 读取 | 否，配置字段 | 后续可根据已部署模型、SDK 能力或服务注册信息自动生成 |
+
+
+#### 代码修改
+| 所属模块 | 新增内容 | 字段 / 函数 | 当前实现方式 | 作用 | 说明 |
+|---|---|---|---|---|---|
+| `collector` | 新增加速器内存占用率字段 | `mem_util_percent` | 从 `bm-smi` 的 `Memory-Usage` 解析，例如 `0MB/13311MB` | 表示 TPU / 加速器侧内存占用率 | 与 `memory_usage_percent` 不同，后者是 Linux 系统内存 |
+| `collector` | 新增 TPU 内存解析函数 | `parse_tpu_memory_usage_percent(output)` | 用正则解析 `usedMB/totalMB`，计算 `used / total * 100` | 把 `bm-smi` 的内存使用量转成百分比 | 例如 `2048MB/13311MB` 会得到约 `15.39` |
+| `collector` | 新增 TPU 内存获取函数 | `get_mem_util_percent()` | 调用 `bm-smi`，解析 `Memory-Usage` | 给状态包提供 `mem_util_percent` | 如果解析失败，建议返回 `0.0`，不要用系统内存冒充 TPU 内存 |
+| `collector` | 新增输入帧率字段 | `fps_input` | 当前从配置常量读取，默认 `0.0` | 表示当前节点输入任务速率 / 输入帧率 | 当前是占位字段，后续应由摄像头或视频输入管线实时统计 |
+| `collector` | 新增输入帧率函数 | `get_fps_input()` | 返回 `DEFAULT_FPS_INPUT` | 给状态包提供 `fps_input` | 后续可替换为最近一段时间内的真实 FPS |
+| `collector` | 新增任务队列长度字段 | `queue_length` | 当前从配置常量读取，默认 `0` | 表示当前待处理任务数 | 当前是占位字段，后续应接入真实任务队列 |
+| `collector` | 新增队列长度函数 | `get_queue_length()` | 返回 `DEFAULT_QUEUE_LENGTH` | 给状态包提供 `queue_length` | 后续可替换为 `task_queue.qsize()` 或实际队列长度 |
+| `collector` | 新增节点健康状态字段 | `health_state` | 根据温度、CPU、TPU、内存、队列长度判断 | 表示节点是否适合继续接任务 | 支持 `AVAILABLE`、`BUSY`、`OVERHEAT`、`DEGRADED` |
+| `collector` | 新增健康状态判断函数 | `get_health_state(metrics)` | 使用阈值规则判断 | 将多个底层指标转成更高层的节点状态 | `status="online"` 继续表示在线，`health_state` 表示可用程度 |
+| `collector` | 新增剩余接活能力字段 | `available_capacity` | 根据 TPU 利用率、加速器内存利用率、队列长度估算 | 表示当前节点剩余处理能力，范围 `0~1` | 当前是启发式估算值，后续可按正式公式调整 |
+| `collector` | 新增剩余能力估算函数 | `estimate_available_capacity(...)` | `0.5*tpu_free + 0.3*mem_free + 0.2*queue_free` | 快速给任务分配提供决策依据 | 不是硬件真实值，是根据状态字段算出的评分 |
+| `collector` | 新增能力列表字段 | `capabilities` | 从配置常量 `CAPABILITIES` 读取，默认 `["cv"]` | 表示该节点支持哪些任务类型 | 后续任务分配可根据 `task_type` 和 `capabilities` 匹配节点 |
+| `collector` | 新增能力读取函数 | `get_capabilities()` | 返回配置里的能力列表 | 给状态包提供 `capabilities` | 当前不自动探测，手动配置 |
+| `config` | 新增能力配置 | `CAPABILITIES` | 默认 `["cv"]` | 配置节点支持的任务能力 | 例如可改成 `["cv", "llm"]` |
+| `config` | 新增占位负载配置 | `DEFAULT_FPS_INPUT`、`DEFAULT_QUEUE_LENGTH` | 默认 `0.0` 和 `0` | 在没有真实输入管线/任务队列时保持字段存在 | 后续接入真实业务逻辑后可替换 |
+| `config` | 新增健康判断阈值 | `CPU_BUSY_THRESHOLD`、`TPU_BUSY_THRESHOLD`、`MEM_BUSY_THRESHOLD`、`OVERHEAT_TEMP_C`、`DEGRADED_TEMP_C`、`BUSY_QUEUE_LENGTH` | 固定阈值 | 用于判断 `health_state` 和估算容量 | 后续可根据 Airbox 实测情况调参 |
+| `receiver` | 新增任务请求包识别 | `is_task_request_packet(obj)` | 判断 `msg_type == "task_request"` | 让接收端能区分任务请求包 | 不影响原来的 `ping`、`get_status`、`get_peers` |
+| `receiver` | 新增任务请求构造函数 | `build_task_request(...)` | 构造包含任务信息的 JSON 字典 | 预留后续任务招标协议格式 | 包含 `task_id`、`task_type`、`priority`、`deadline_ms` |
+| `receiver` | 新增竞标回复构造函数 | `build_bid_response(task_request, status)` | 根据本机状态生成竞标回复 | 预留后续任务分配中的节点竞标机制 | 包含 `estimated_latency_ms`、`score`、`can_handle` 等 |
+| `receiver` | 新增任务请求处理函数 | `handle_task_request_packet(...)` | 收到任务请求后采集本机状态并返回竞标回复 | 让 Airbox 初步具备“接收任务招标并回复”的能力 | 当前只回复评分，不真正执行任务 |
+| `receiver` | 新增竞标相关字段 | `estimated_latency_ms` | 当前用 `(1 - available_capacity) * 1000` 估算 | 表示预计处理延迟 | 目前是占位公式，后续应替换为真实模型耗时估算 |
+| `receiver` | 新增竞标相关字段 | `score` | 当前如果能力匹配，则等于 `available_capacity`，否则为 `0` | 表示该节点对任务的竞标分数 | 目前是简单评分公式，后续可加入 deadline、历史成功率等因素 |
+| `receiver` | 新增竞标相关字段 | `can_handle` | 判断 `task_type in capabilities` | 表示该节点是否支持该任务类型 | 用于避免把任务分给不支持的节点 |
+| `receiver` | 接收主循环新增分支 | `elif is_task_request_packet(obj)` | 分流到 `handle_task_request_packet()` | 支持任务请求协议 | 原有状态包和命令包逻辑保持不变 |
+| `broadcaster` | 广播状态包自动新增字段 | 无需单独新增函数 | 因为广播端调用 `collect_status()` | 广播包自动包含新增状态字段 | `broadcaster.py` 入口文件本身无需改 |
+| `receiver` | `get_status` 自动返回新增字段 | 无需单独新增字段处理 | 因为 `get_status` 调用 `collect_status()` | 查询本机状态时能看到新增字段 | 原有命令协议保持兼容 |
+| `receiver` | `get_peers` 自动返回新增字段 | 无需单独新增字段处理 | 因为状态包原样存入 `peer_table` | 查询节点表时能看到其他节点的新字段 | 原有 peer_table 存储逻辑保持兼容 |
+
 
 
 
