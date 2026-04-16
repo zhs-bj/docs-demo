@@ -8,6 +8,7 @@
 
 围绕真实实验痛点做出可直接被别人接手的工具
 
+## 分析
 ### Fudan 2023 RAP
 不是单纯网页，而是设计工作流 + API + 实验验证的完整工具链
 
@@ -245,3 +246,84 @@ wiki中说他们把这个流程具体到了DBTL各阶段：
 
 2. Similar part search
 以前就有 BLAST 这类通用序列比对工具，Fudan 2024 最后也选择了 BLAST 路线
+
+
+## 尝试使用
+### 2024 fudan software
+参考https://2024.igem.wiki/fudan/software/#_1-installation
+
+我以本电脑windows为例，尝试部署
+#### docker方法
+1. 首先确保电脑上安装了 Docker Desktop
+2. 然后这个Docker Desktop，打开，左下角是在running的即可
+<img src="image-14.png" width="350">
+
+3. 在自己电脑上，自己喜欢的目录下，新建一个文件夹，比如我建在了`D:\igem\igem_software\fudan_2024_parthub_deploy`
+
+4. 进入文件夹，新建文件`docker-compose.yml`，然后里面的内容填写：
+```yml
+services:
+  flask:
+    image: chc1234567890/fudanigem2024:1.0.0
+    ports:
+      - "5000:5000"
+    restart: always
+    depends_on:
+      - parthub
+    environment:
+      - SERVER_URL=bolt://parthub:7687
+      - SERVER_USER=neo4j
+      - SERVER_PASSWORD=igem2024
+  parthub:
+    image: neo4j:5.11
+    restart: always
+    environment:
+      - NEO4J_AUTH=neo4j/igem2024
+      - NEO4J_PLUGINS=["graph-data-science"]
+      - NEO4J_dbms_security_procedures_allowlist=gds.*
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    deploy:
+      resources:
+        reservations:
+          memory: 2G
+```
+
+5. 打开终端，进入工作目录`D:\igem\igem_software\fudan_2024_parthub_deploy`，执行
+```powershell
+docker compose up -d
+```
+这个拉取docker镜像的过程很慢
+
+6. 等它结束了，就可以访问`http://localhost:5000/`
+<img src="image-15.png" width="350">
+
+
+
+#### git clone源代码方法
+1. clone到本地
+先`cd`到目标目录，然后`git clone`，此处需要**稳定的代理**，不然会error
+```powershell
+cd "D:\igem\igem_software"
+git clone https://gitlab.igem.org/2024/software-tools/fudan.git
+```
+
+2. 然后执行
+```powershell
+cd fudan/webUI
+npm install
+cd ..
+pack.bat
+```
+
+3. 然后我记得`pack.bat`后会报错，提示缺失什么什么包，按照提示段去安装就行
+
+4. 但最后因为数据集还需要自己去导入到`Neo4j`中，于是我又去官网下了`Neo4j Desktop`,并新建了一个instance
+
+5. 但好像一直卡在了这里，不知为何，就没再研究了
+<img src="image-16.png" width="350">
+
+6. wiki提到“数据存储方面，我们使用 Neo4j 5.11，这是一个强大的图数据库，擅长管理复杂关系的大型数据集。”之后我再去研究一下
+

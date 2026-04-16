@@ -589,3 +589,327 @@ E- xport > Save for Web (Legacy)，格式选 GIF，透明勾上，循环选 Fore
 
 
 
+
+
+### 2024 fudan
+#### 开窗效果
+##### 效果整体描述
+<img src="./image-7.png" width="350">
+打开首页，首先是带有标题和多层窗框的画面。向下滚动鼠标，会发生两件事：
+
+- 放大：多层窗框以不同速度快速放大，产生一种正在向窗户里面前进的感觉
+- 开窗：随后遮蔽向上退去，原本被遮住的下方世界逐渐显现，像窗户被打开一样
+
+代码在`src/.vuepress/components/HomePage.vue`
+
+##### 页面结构
+页面被分成了两层
+
+1. 固定的动画层：`.animation-container`
+```html
+<div class="animation-container">
+  <svg viewBox="0 0 1920 953" width="100%" height="100%">
+    <!-- 所有 SVG 图片和遮罩都在这里 -->
+  </svg>
+</div>
+```
+```css
+.animation-container {
+  position: fixed;      /* 关键：固定在整个视口上，不随滚动条移动 */
+  top: 0;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  z-index: 1;           /* 放在底层 */
+  pointer-events: none; /* 不阻挡鼠标点击下层内容 */
+}
+```
+这个固定层的容器是不动的，但是图案等会随着下滑进度条而变
+
+2. 可滚动的内容层: `<main>`
+```html
+<main>
+  <div class="scrollDist"></div>  <!-- 高度 300vh，专门用来记录进度条 -->
+  <section class="page-1">...</section>
+  <section class="page-2">...</section>
+  <!-- ... 后续很多 section -->
+</main>
+```
+```css
+main {
+  position: relative;
+  z-index: 2;  /* 放在上层，覆盖在动画层之上 */
+}
+.scrollDist {
+  height: 300vh;  /* 300% 的屏幕高度，提供很长的滚动距离 */
+}
+```
+`main`才是真正的网页内容，`.scrollDist`是一个非常高的空白区域，是为了让浏览器出现一个很长的滚动条，方便控制开窗过程的动画
+
+##### 核心技术
+###### SVG Mask 遮幕
+一种镂空工具，能选择性的遮住或显示下方的内容
+
+1. 代码中的Mask定义
+在 `HomePage.vue:11-15`
+```html
+<mask id="m">
+  <g class="cloud1">
+    <!-- 一个巨大的白色矩形 -->
+    <rect fill="#fff" width="100%" height="1801" y="953" />
+  </g>
+</mask>
+```
+
+2. 被遮幕的内容（在Mask下方）
+位置`HomePage.vue:89-98`
+```html
+<g mask="url(#m)">  <!-- 这一组元素要接受 id="m" 的遮罩控制 -->
+  <rect fill="#CDE3EC" width="100%" height="100%" class="gan"/>
+  <image class="mineral2" xlink:href="..." />
+  <g id="scroll-arrow">
+    <polygon class="down-arrow" points="960,910 940,880 980,880" fill="#000" />
+  </g>
+</g>
+```
+
+3. Mask的动态变化，GSAP驱动
+GSAP是js的一个动画库，通常用于网页中的视觉效果动画
+
+位置 `HomePage.vue:1366`
+```javascript
+.fromTo('.cloud1', { y: 100 }, { y: -950, duration: 5 }, 'afterScaling')
+```
+
+|状态	|`.cloud1` 的 y 值	|白色矩形的位置	|被遮罩内容（gan + mineral2 + 箭头）|
+|---|---|---|---|
+|初始|	953	|刚好盖住整个屏幕下方|	完全看不见（被白色矩形遮住）|
+|滚动中	|100 → 0 → -950	|白色矩形逐渐向上移出屏幕|	随着矩形上移，逐渐显露出来|
+|最终	|-950	|完全移出屏幕上方	|完全可见|
+
+`.cloud1` 里有一块巨大的白色幕布。最开始这块幕布横在屏幕下方，把下方的世界盖住了。滚动时，GSAP 把这块幕布向上拉走，幕布下面的浅蓝色背景和矿物图案就一点一点露出来了，这就是开窗的视觉来源。
+
+###### ScrollTrigger 滚动
+1. GSAP:前端最强大的动画库之一，可以精确控制任何DOM元素或SVG元素的：
+- 位置（`x,y`）
+- 缩放（`scale`）
+- 旋转（`rotation`）
+- 透明度（`opacity`）
+- 颜色（`fill`,`backgroundColor`）
+
+2. ScrollTrigger
+是GSAP的一个插件，能把**滚动条的进度**和**动画的进度**绑定在一起。
+
+3. 关键的ScrollTrigger配置
+位置：`HomePage.vue:1298-1313`
+```javascript
+const tl = gsap.timeline({
+  scrollTrigger: {
+    trigger: '.scrollDist',     // 监听哪个元素
+    start: 'top top',           // 当 .scrollDist 的顶部碰到视口顶部时，动画开始
+    end: 'bottom bottom',       // 当 .scrollDist 的底部碰到视口底部时，动画结束
+    scrub: 1,                   // 动画进度紧跟滚动进度（1秒缓冲）
+  },
+});
+```
+- `.scrollDist`高300vh，有3个屏幕高度的滚动距离来播放这个开窗效果的动画
+- 滚到0%，动画在0%，滚到50%，动画在50%
+
+4. 动画时间线的两段式结构
+```javascript
+// 第一段：缩放（0 ~ afterScaling）
+tl.fromTo(['.frame0'], { scale: 1 }, { scale: 18, duration: 4, ease: 'power2.inOut' }, 0);
+tl.fromTo(['.frame1'], { scale: 1 }, { scale: 15, duration: 5, ease: 'power2.inOut' }, 0);
+tl.fromTo(['.frame2'], { scale: 1 }, { scale: 11, duration: 6, ease: 'power2.inOut' }, 0);
+// ... 更多元素的缩放
+
+// 标记一个节点
+.addLabel('afterScaling')
+
+// 第二段：位移/开窗（afterScaling ~ afterframe）
+.fromTo('.frame7', { y: 0 }, { y: -200, duration: 5 }, 'afterScaling')
+.fromTo('.cloud1', { y: 100 }, { y: -950, duration: 5 }, 'afterScaling')
+.fromTo('.mineral2', { y: 200 }, { y: -350, duration: 5 }, 'afterScaling')
+// ...
+.addLabel('afterframe');
+```
+时间线进度与滚动进度的对应关系
+
+| 滚动进度  | 时间线阶段    | 用户看到的画面                                                      |
+| --------- | ------------- | --------------------------------------------------------------------- |
+| 0% ~ 60%  | 第一段        | 多层窗框和云层快速放大，产生"向深处飞去"的感觉                        |
+| 60% ~ 90% | 第二段        | 放大完成后，遮罩云层向上退去，窗框和波浪向上飞出，下方新世界显露       |
+| 90% ~ 100%| afterframe    | 矿物和箭头继续上移，引导用户进入下面的 page-1                        |
+
+###### 多层视差
+ 缩放的元素分为几类，每一类的放大倍数不同，从而产生视差（近大远小）
+
+1） 窗框类（放大最猛，营造穿透感）
+
+| 元素    | 初始 scale | 最终 scale | 视觉效果                              |
+| ------- | ---------- | ---------- | ------------------------------------- |
+| .frame0 | 1          | 18         | 最前面的窗框，飞速变大，感觉向人扑来   |
+| .frame1 | 1          | 15         | 第二层窗框，放大也很快                |
+| .frame2 | 1          | 11         | 第三层窗框，放大较快                  |
+
+2） 波浪和中景元素（中等放大）
+
+| 元素       | 初始 scale | 最终 scale | 视觉效果                              |
+| ---------- | ---------- | ---------- | ------------------------------------- |
+| .wave1~4 + .frame4 | 1          | 1.6        | 远处的波浪和山，放大很慢，感觉在背景深处 |
+| .carbo2~5  | 1          | 1.4        | 碳分子，中等速度                      |
+
+3） 标题和特殊元素
+
+| 元素    | 初始 scale | 最终 scale | 视觉效果                              |
+| ------- | ---------- | ---------- | ------------------------------------- |
+| .title  | 0.6        | 1          | 标题从较小状态慢慢放大到正常           |
+| .carbo1 | 0.6        | 0.8        | 一个远处的碳分子，只稍微变大          |
+
+1. GSAP fromTo 语法拆解
+
+每一行都长这样：
+
+```js
+tl.fromTo(
+  ['.frame0'],                           // 目标元素（选择器）
+  { scale: 1, transformOrigin: 'center center' },  // 起始状态
+  { scale: 18, duration: 4, ease: 'power2.inOut' }, // 结束状态
+  0                                      // 在时间线上的开始位置（第0秒）
+);
+```
+参数解释：
+- `['.frame0']`：给谁做动画。这里是一个数组，里面放 CSS 选择器。
+- `{ scale: 1, transformOrigin: 'center center' }`：动画开始时，这个元素的状态。
+  - `scale: 1` = 原始大小
+  - `transformOrigin: 'center center'` = 从元素中心点开始缩放
+- `{ scale: 18, duration: 4, ease: 'power2.inOut' }`：动画结束时，这个元素的状态。
+  - `scale: 18` = 变成原来的 18 倍大
+  - `duration: 4` = 这个过程占用时间线 4 个单位（不是真实秒数，因为 ScrollTrigger 会把它映射到滚动距离上）
+  - `ease: 'power2.inOut'` = 先慢后快再慢，很平滑
+- `0`：这个动画从时间线的第 0 个单位开始。也就是说，所有缩放动画是同时开始的。
+
+2. 视差来源： 
+人眼的经验告诉我们：当走近一个隧道时，隧道口（近处）会**变化很大**，而隧道深处的东西**变化很小**。这里把 `.frame0` 放大 18 倍，模拟正在飞速穿过最前面的窗框；而远处的波浪只放大 1.6 倍，模拟它们很远。这种**速度差异**就是**纵深感**的来源。
+
+
+#### SVG图片层叠
+1. 元素顺序
+在SVG中，后写的元素会覆盖先写的元素
+```html
+<image class="frame7" />   <!-- 最底层：远处的背景山 -->
+<image class="carbo5" />
+<image class="frame6" />
+<image class="carbo4" />
+<image class="wave4" />
+<image class="carbo3" />
+<image class="wave3" />
+<image class="frame4" />
+<image class="carbo2" />
+<image class="wave2" />
+<image class="carbo1" />
+<image class="wave1" />
+<image class="mineral" />
+<image class="frame2" />   <!-- 中间层 -->
+<image class="frame1" />
+<image class="frame0" />   <!-- 最前面：离你最近的窗框 -->
+<image class="title" />    <!-- 标题在最上方 -->
+
+<!-- 遮罩层（盖住下面的 gan/mineral2/箭头） -->
+<g mask="url(#m)">
+  <rect class="gan" fill="#CDE3EC" />
+  <image class="mineral2" />
+  <g id="scroll-arrow">...</g>
+</g>
+```
+
+`frame7` 是最先写的，所以在最底层；`title` 是后写的，所以在最上层。而遮罩组 `<g mask="url(#m)">` 是最后写的，但它罩着的内容被 `.cloud1` 遮住了，初始状态下看不见。
+
+2.  元素的分类
+可以把这些元素分成三类：
+
+|类别	|元素|	动画行为|
+|---|---|---|
+|前景窗框	|`frame0`,` frame1`, `frame2`|	快速放大，然后向上飞出|
+|中景装饰	|`wave1~4`, `carbo1~5`, `frame4~7`	|中等放大，然后向上飞出|
+|背景/遮罩后内容|	`gan`, `mineral2`, `down-arrow`	|被 mask 遮住，mask 移开后显露并上移|
+
+
+### 2025 msp-maastricht
+<img src="./image-8.png" width="350">
+
+#### 3D建模？
+这个 wiki 首页的 3D 穿梭效果 并不是浏览器实时 3D 渲染，而是用 预渲染帧序列 + 滚动驱动（Scrollytelling） 实现的。
+
+##### 预渲染帧序列动画
+本质上是 999 张静态图片 按滚动位置快速切换
+
+1. 数据与加载
+在`src/pages/HomePage.tsx:22-26`：
+```tsx
+const FRAME_COUNT = 999;           // 总帧数
+const BATCH_SIZE = 25;             // 分批预加载
+const getFrameSrc = (index: number) =>
+  getImageUrl(`/landingPage/newcity/${String(index).padStart(4, "0")}.webp`);
+```
+页面启动时会并发预加载这 999 张 webp 图片（每批 25 张），并显示一个加载进度条。
+
+2. 滚动映射
+在 `src/pages/HomePage.tsx:162-197`，代码把**滚动位置**映射为**当前帧索引**：
+```tsx
+function generateScrollToFrameMapping(frameCount, frameActions, scrollUnitsPerFrame = 2) {
+  const mapping = [];
+  for (let frame = 0; frame < frameCount; frame++) {
+    const action = sortedActions.find(a => a.pauseAt === frame);
+    if (action) {
+      // 在关键帧处“暂停”，多重复几次该帧，制造出停留感
+      for (let i = 0; i < action.duration; i++) mapping.push(frame);
+    } else {
+      // 普通帧：每帧对应 N 个滚动像素单位
+      for (let i = 0; i < scrollUnitsPerFrame; i++) mapping.push(frame);
+    }
+  }
+  return mapping;
+}
+```
+页面有一个高度极大的容器（ANIMATION_HEIGHT_FACTOR * 140vh * 3），用户滚动时，根据滚动进度去 mapping 数组里查当前该显示第几帧。
+
+3. Canvas 逐帧绘制
+在 `src/pages/HomePage.tsx:452-504`：
+```tsx
+const renderFrame = useCallback((index: number) => {
+  const ctx = canvasRef.current?.getContext("2d");
+  const img = imagesRef.current[index];
+  if (ctx && img?.complete) {
+    // 保持图片比例，自动适配屏幕
+    const imgAspect = img.naturalWidth / img.naturalHeight;
+    const canvasAspect = canvasRef.current.width / canvasRef.current.height;
+    // ...计算 drawWidth/drawHeight/offsetX/offsetY
+    ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+  }
+}, [canvasSize]);
+```
+滚动事件触发时，通过 `requestAnimationFrame` 调用 `renderFrame`，在 `<canvas>` 上画出当前帧。
+
+##### 交互覆盖层
+首页在特定帧会弹出信息卡片、指示点、标题等。这些由 `InteractiveOverlay` 组件负责
+
+1. 关键帧动作配置
+在 `src/pages/HomePage.tsx:43-159`：
+```tsx
+const FRAME_ACTIONS = [
+  { pauseAt: 25,  duration: 200, overlayId: "introOverlay" },
+  { pauseAt: 40,  duration: 200, overlayId: "firstZoomInBox",  overlayConfigs: ["refrigerator"] },
+  { pauseAt: 80,  duration: 200, overlayId: "secondZoomInBox", overlayConfigs: ["airConditioner"] },
+  // ... 冰箱、空调、医疗设备、汽车散热器、数据中心、HVAC、热交换器、生物膜、解决方案、地球
+];
+```
+当滚动进入这些帧范围时，页面会暂停（通过让 mapping 数组重复同一帧实现），并显示对应的 `overlayConfigs`。
+
+2. 三种覆盖层模式
+在 `src/components/InteractiveOverlay.tsx` 中，支持三种展示形式：
+
+- Intro 模式：中央大卡片，用于开场引导。
+- Advanced 模式：画面某个坐标处出现小黄点 + 连线 + 信息卡片（如冰箱、空调的数据弹窗）。坐标基于原始 1920×1080 设计稿按比例缩放。
+- Section 模式：全屏大字标题 + 描述（如 HVAC Systems、Biofilm Formation 等大段文字说明）。
+- Earth 模式：地球四周分布四个关键词（SUSTAINABILITY、CIRCULARITY 等）。
