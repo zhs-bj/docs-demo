@@ -256,7 +256,7 @@ wiki中说他们把这个流程具体到了DBTL各阶段：
 #### docker方法
 1. 首先确保电脑上安装了 Docker Desktop
 2. 然后这个Docker Desktop，打开，左下角是在running的即可
-<img src="image-14.png" width="350">
+<img src="./image-14.png" width="350">
 
 3. 在自己电脑上，自己喜欢的目录下，新建一个文件夹，比如我建在了`D:\igem\igem_software\fudan_2024_parthub_deploy`
 
@@ -298,7 +298,7 @@ docker compose up -d
 这个拉取docker镜像的过程很慢
 
 6. 等它结束了，就可以访问`http://localhost:5000/`
-<img src="image-15.png" width="350">
+<img src="./image-15.png" width="350">
 
 
 
@@ -323,7 +323,7 @@ pack.bat
 4. 但最后因为数据集还需要自己去导入到`Neo4j`中，于是我又去官网下了`Neo4j Desktop`,并新建了一个instance
 
 5. 但好像一直卡在了这里，不知为何，就没再研究了
-<img src="image-16.png" width="350">
+<img src="./image-16.png" width="350">
 
 6. wiki提到“数据存储方面，我们使用 Neo4j 5.11，这是一个强大的图数据库，擅长管理复杂关系的大型数据集。”之后我再去研究一下
 
