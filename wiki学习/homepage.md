@@ -591,6 +591,7 @@ E- xport > Save for Web (Legacy)，格式选 GIF，透明勾上，循环选 Fore
 
 
 
+## 有亮点的homepage
 ### 2024 fudan
 #### 开窗效果
 ##### 效果整体描述
