@@ -248,6 +248,107 @@ wiki中说他们把这个流程具体到了DBTL各阶段：
 以前就有 BLAST 这类通用序列比对工具，Fudan 2024 最后也选择了 BLAST 路线
 
 
+### 2021 Leiden
+[2021 Leiden DIKST](https://2021.igem.org/Team%3ALeiden/Kit-Search)
+
+<img src="./image-18.png" width="450">
+
+Distribution Kit Search Tool，简称 DiKST.
+
+直接访问[DiKST](https://2021.igem.org/Team:Leiden/Distribution-kit-search?#)就可以使用了，就像上面那个绿色的页面
+
+#### why
+他们在规划实验时频繁使用 Distribution Kit，但发现 Registry 里 Distribution Kit 页面主要只显示 part ID，想靠功能或者描述找构件很麻烦，所以开发了 DiKST 来让后续 iGEM 队伍更容易浏览 kit、快速找到 parts。
+
+#### 主要功能
+1. 按关键词搜索 Distribution Kit 中的 BioBrick
+2. 显示 part 在 Distribution Kit 中的位置
+DiKST 会告诉这个 BioBrick 在 Distribution Kit 的哪一块板、哪一个孔。不用再回头翻官方表格找
+3. 显示 part 的简要描述
+4. 提供 Registry 原页面跳转
+5. 可以为未来年份的 kit 重新生成数据库
+提供了一个 Python 程序，理论上可以用新的 Distribution Kit plate 文件重新生成数据库。不过也有小局限：它基于 2021 年及以前年份的 Excel/CSV 结构，如果之后 Distribution Kit 的 CSV 格式变了，可能需要改代码。
+
+#### 数据来源
+| 数据来源                                  | 用途                            |
+| ------------------------------------- | ----------------------------- |
+| Distribution Kit plate CSV / Excel 文件 | 获取 BioBrick 编号和 plate/well 位置 |
+| iGEM Registry API                     | 获取 BioBrick 的分类、标签等结构化信息      |
+| 每个 BioBrick 的 Registry 页面             | 抓取描述性文本，用于关键词搜索               |
+
+#### 技术结构分析
+
+从软件架构看，DiKST 可以拆成三层：
+
+1. 数据采集层
+
+Python 脚本负责：
+```text
+读取 CSV；
+
+建立 BioBrick 条目；
+
+记录 plate/well 位置；
+
+调用 Registry API；
+
+抓取 Registry 页面；
+
+提取描述性文本。
+```
+
+
+2. 数据库层
+
+最终数据不是 SQL 数据库，而是一个静态 JSON 文件。
+
+这很符合 iGEM wiki 的限制，因为很多时候不能在 iGEM 服务器上跑**后端程序**。Leiden 也说明，因为 iGEM 编程限制，他们不能做服务器端处理，所以选择了**客户端搜索**。(下面会讲到服务器的付费问题)
+
+
+3. 前端检索层
+
+前端是一个网页搜索框。用户输入关键词后，浏览器在本地 JSON 数据中检索。
+
+wiki提到搜索在 client/browser side 进行，所以取决于电脑性能，可能会慢 1–2 秒。
+
+它适合**小而静态**的数据库，但不适合特别大规模的知识库。
+
+#### 不用持续付费？
+有前端，但几乎没有在线后端。
+
+1. 它不需要一个长期运行的服务器程序。它的后端工作主要是在部署前由 Python 脚本离线完成，生成一个 dataset.json 数据库文件。真正访问时，只是在浏览器里打开一个**静态网页**。
+
+2. 运行时的结构：
+```text
+用户浏览器
+  ↓ 访问网页
+iGEM 静态服务器返回 HTML / JS / JSON
+  ↓
+浏览器里的 JS 搜索 dataset.json
+```
+
+3. 有一个**离线后端脚本**
+这个`DiKST.py`脚本负责
+```text
+读取 Distribution Kit 的 plate CSV
+↓
+获取每个 BBa part 的 plate / well 位置
+↓
+调用 Registry API
+↓
+抓取 Registry 页面信息
+↓
+整理 part 描述
+↓
+生成 dataset.json
+```
+这个过程只在准备数据库时运行一次，不是用户每次搜索时都运行。
+
+5. fudan 2024的software
+是后端型，它的Docker Compose里有两个服务，一个 Flask 后端服务和一个 Neo4j 图数据库服务。
+
+它的服务器要真正工作，不是单纯静态网页
+
 ## 尝试使用
 ### 2024 fudan software
 参考https://2024.igem.wiki/fudan/software/#_1-installation
@@ -327,3 +428,119 @@ pack.bat
 
 6. wiki提到“数据存储方面，我们使用 Neo4j 5.11，这是一个强大的图数据库，擅长管理复杂关系的大型数据集。”之后我再去研究一下
 
+
+## 形态
+### PyPI包
+受 Munich 2025 contribution中，他们做的registry_api的启发，他们就是把工具链做成这个PyPI包，然后发不到了PyPI，PyPI本身是Python社区用于分发软件包的标准仓库
+
+
+#### 好处
+1. 方便，别人可以直接`pip install 包名`
+2. **不用付钱**。把自己的工具上传到了一个公开的平台，大家可以pip install来用
+3. 可以**长期留存**。之前问gong shitao学长，做好的软件，要想让大家都能访问，需要跑在一台公共服务器上，需要承担好多费用，所以比赛停了一般就关了，但这个PyPI包可以一直留存。
+4. 其实是一个分发包文件，发给用户，自己安装运行。把软件部署到自己电脑上也能跑，但是无论是拉取docker还是clone源代码来部署，都不是那么的用户友好型。而直接在命令行`pip install`就真的很方便，
+5. 很好的思路，我觉得我们也可以搞一个工具链，发布到PyPI
+
+
+#### 怎么发布到PyPI
+1. 把代码整理成符合 Python packaging 规范的项目。 [Python打包用户指南](https://packaging.python.org/en/latest/tutorials/packaging-projects/?utm_source=chatgpt.com)
+
+（1）官方推荐的基础目录
+现在让cc或者codex去vibe coding一个工程项目，也能很天然生成这样的目录结构和文件，不成问题。这也是很标准的工程框架
+```text
+your_project/
+├── LICENSE
+├── pyproject.toml
+├── README.md
+├── src/
+│   └── your_package/
+│       ├── __init__.py
+│       └── ...
+└── tests/
+```
+要注意的点：
+- 代码建议放在 `src/` 下面。
+- 包目录里最好有 `__init__.py`，这样它能作为常规 package 被 import。
+- 项目根目录要有 `README.md`、`LICENSE`、`pyproject.toml`
+
+（2）最核心的文件：`pyproject.toml`
+
+它需要告诉打包工具：
+
+1）用什么构建后端
+
+常见后端有 Hatchling、Setuptools、Flit、PDM、uv-build。官方教程默认用 Hatchling，但这些只要支持 [project] 元数据表，思路都差不多。
+
+例子：
+```toml
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+```
+- `requires`：构建这个包时需要先装什么
+- `build-backend`：实际负责打包的是谁。
+
+2）项目元数据是什么
+
+ `[project]`是项目身份证。官方教程给的关键字段包括：
+```text
+name
+version
+authors
+description
+readme
+requires-python
+classifiers
+license
+license-files
+project.urls
+```
+要明确告诉 PyPI：是谁、支持什么 Python 版本、许可证是什么、主页在哪。
+
+2. 在 PyPI 上注册并上传这个项目。PyPI 帮项目托管名字、版本、分类等元数据，这些分类信息本身就是由项目维护者提供的。
+3. 用合法的发布身份去维护它。PyPI 还要求维护项目的账号满足安全要求，比如维护者账户需要启用 2FA。
+
+（3）一定要有 LICENSE
+
+官方教程特别强调，每个上传到 PyPI 的分发包都应该包含 license，告诉用户在什么条款下可以使用。license-files 也可以帮助把 license 自动打进包里。
+
+想让别的队伍或老师放心用，MIT / BSD / Apache-2.0 这种开源许可证最好早点定。
+
+（4）准备`tests/`
+
+一开始可以是空的，放那占位，但一定要有
+
+2. 整理好了怎么发：
+
+（1）变成可发布的包
+
+1）安装构建工具：先升级`build`
+
+2）在`pyproject.toml`所在目录运行：
+```bash
+python -m build
+```
+它会在 `dist/` 下面生成两类分发文件
+
+（2）先发到 `TestPyPI` 做测试
+
+它是专门给实验和试上传用的，不是正式仓库。需要：
+
+- 注册 TestPyPI 账号
+- 验证邮箱
+- 创建 API token
+- 装 `twine`
+- 用 `twine upload --repository testpypi dist/*` 上传。
+
+然后可以在虚拟环境里用 `pip --index-url https://test.pypi.org/simple/ ...` 试装，确认安装和 import 没问题。
+
+（3）去正式的 `pypi.org` 发正式版
+
+官方还提醒，TestPyPI 和正式 PyPI 是两个不同系统，账号不共用。
+
+3. 安全承诺
+
+[通过双因素认证保护 PyPI 账户](https://blog.pypi.org/posts/2023-05-25-securing-pypi-with-2fa/?utm_source=chatgpt.com)
+
+### 软件
+中规中矩的分为前端后端，部署到公共服务器上，网址大家都可以访问
