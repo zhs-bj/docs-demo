@@ -7,6 +7,13 @@
 4. 盒子关机：要在airbox里输入`sudo poweroff`，然后再拔掉盒子的电源
 5. 处理器：BM1684X（算能面向深度学习领域推出的第四代张量处理器）
 6. python版本：3.8.2
+7. 增删文件夹：首先要在对应的目录下
+- 删：`rm -rf [文件夹名]`
+- 增：从电脑移到盒子：`scp -r [文件夹名] linaro@192.168.31.70:~/Sophon_Competition/`
+8. 盒子ip：192.168.31.70
+9. 电脑局域网ip：192.168.31.11
+10. 进入盒子工作目录：`cd /mnt/sdcard/Sophon_Competition`
+11. 运行demo:例如：`python3 demo/01_ping.py`
 
 ---
 ## 硬件连接准备工作
